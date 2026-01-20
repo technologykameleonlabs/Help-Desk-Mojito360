@@ -5,6 +5,9 @@ import { supabase } from './lib/supabase'
 import { LoginPage } from './pages/LoginPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { NewTicketPage } from './pages/NewTicketPage'
+import { InboxPage } from './pages/InboxPage'
+import { MyTicketsPage } from './pages/MyTicketsPage'
+import { ArchivePage } from './pages/ArchivePage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -55,14 +58,25 @@ function App() {
             element={
               <ProtectedRoute>
                 <Routes>
+                  {/* Dashboard */}
                   <Route path="/" element={<DashboardPage />} />
-                  <Route path="/new" element={<NewTicketPage />} />
                   <Route path="/ticket/:id" element={<DashboardPage />} />
-                  <Route path="/inbox" element={<DashboardPage />} />
-                  <Route path="/my-tickets" element={<DashboardPage />} />
-                  <Route path="/archive" element={<DashboardPage />} />
+                  
+                  {/* New Ticket */}
+                  <Route path="/new" element={<NewTicketPage />} />
+                  
+                  {/* Inbox */}
+                  <Route path="/inbox" element={<InboxPage />} />
+                  <Route path="/inbox/:id" element={<InboxPage />} />
+                  
+                  {/* My Tickets */}
+                  <Route path="/my-tickets" element={<MyTicketsPage />} />
+                  <Route path="/my-tickets/:id" element={<MyTicketsPage />} />
+                  
+                  {/* Archive */}
+                  <Route path="/archive" element={<ArchivePage />} />
+                  <Route path="/archive/:id" element={<ArchivePage />} />
                 </Routes>
-
               </ProtectedRoute>
             }
           />
@@ -73,3 +87,4 @@ function App() {
 }
 
 export default App
+
