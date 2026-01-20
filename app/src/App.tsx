@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { supabase } from './lib/supabase'
 import { LoginPage } from './pages/LoginPage'
 import { DashboardPage } from './pages/DashboardPage'
+import { NewTicketPage } from './pages/NewTicketPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -15,6 +16,7 @@ const queryClient = new QueryClient({
 })
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
+
   const [loading, setLoading] = useState(true)
   const [authenticated, setAuthenticated] = useState(false)
 
@@ -54,10 +56,13 @@ function App() {
               <ProtectedRoute>
                 <Routes>
                   <Route path="/" element={<DashboardPage />} />
+                  <Route path="/new" element={<NewTicketPage />} />
+                  <Route path="/ticket/:id" element={<DashboardPage />} />
                   <Route path="/inbox" element={<DashboardPage />} />
                   <Route path="/my-tickets" element={<DashboardPage />} />
                   <Route path="/archive" element={<DashboardPage />} />
                 </Routes>
+
               </ProtectedRoute>
             }
           />

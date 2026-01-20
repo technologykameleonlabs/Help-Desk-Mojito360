@@ -85,7 +85,8 @@ export type Comment = {
 }
 
 // Stage display configuration
-export const STAGE_CONFIG: Record<TicketStage, { label: string; color: string }> = {
+export const STAGES: Record<TicketStage, { label: string; color: string }> = {
+
   new: { label: '📧 Nuevo', color: 'bg-blue-500' },
   assigned: { label: '🧍 Asignado', color: 'bg-yellow-500' },
   in_progress: { label: '✍️ En Ejecución', color: 'bg-orange-500' },
@@ -99,7 +100,8 @@ export const STAGE_CONFIG: Record<TicketStage, { label: string; color: string }>
   cancelled: { label: '❌ Cancelado', color: 'bg-red-500' },
 }
 
-export const PRIORITY_CONFIG: Record<TicketPriority, { label: string; color: string }> = {
+export const PRIORITIES: Record<TicketPriority, { label: string; color: string }> = {
+
   low: { label: 'Baja', color: 'bg-zinc-500' },
   medium: { label: 'Media', color: 'bg-blue-500' },
   high: { label: 'Alta', color: 'bg-orange-500' },

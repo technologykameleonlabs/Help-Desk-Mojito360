@@ -1,8 +1,9 @@
 import { useMemo } from 'react'
 import { useTickets } from '../hooks/useData'
 import type { Ticket, TicketStage } from '../lib/supabase'
-import { STAGE_CONFIG, PRIORITY_CONFIG } from '../lib/supabase'
-import { Clock, User, Building2 } from 'lucide-react'
+import { STAGES, PRIORITIES } from '../lib/supabase'
+import { User, Building2 } from 'lucide-react'
+
 
 
 const KANBAN_STAGES: TicketStage[] = [
@@ -16,41 +17,35 @@ const KANBAN_STAGES: TicketStage[] = [
 ]
 
 function TicketCard({ ticket, onClick }: { ticket: Ticket; onClick: () => void }) {
-  const priority = PRIORITY_CONFIG[ticket.priority]
+  const priority = PRIORITIES[ticket.priority]
   
   return (
     <div
       onClick={onClick}
-      className="bg-zinc-900 border border-zinc-800 rounded-lg p-3 cursor-pointer hover:border-zinc-700 transition-colors group"
+      className="bg-white border border-[#E0E0E1] rounded-xl p-3 cursor-pointer hover:border-[#6353FF] hover:shadow-md transition-all group"
     >
       <div className="flex items-start justify-between gap-2 mb-2">
-        <span className="text-xs font-mono text-zinc-500">#{ticket.ticket_ref}</span>
-        <span className={`text-xs px-2 py-0.5 rounded-full ${priority.color} text-white`}>
+        <span className="text-xs font-mono text-[#8A8F8F]">#{ticket.ticket_ref}</span>
+        <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${priority.color} text-white`}>
           {priority.label}
         </span>
       </div>
       
-      <h3 className="text-sm font-medium text-white group-hover:text-primary-400 transition-colors line-clamp-2 mb-3">
+      <h3 className="text-sm font-semibold text-[#3F4444] group-hover:text-[#6353FF] transition-colors line-clamp-2 mb-3">
         {ticket.title}
       </h3>
       
-      <div className="flex flex-wrap gap-2 text-xs text-zinc-500">
+      <div className="flex flex-wrap gap-2 text-xs text-[#8A8F8F]">
         {ticket.entity && (
           <span className="flex items-center gap-1">
             <Building2 className="w-3 h-3" />
-            {ticket.entity.name}
+            <span className="truncate max-w-[120px]">{ticket.entity.name}</span>
           </span>
         )}
         {ticket.assigned_to_profile && (
           <span className="flex items-center gap-1">
             <User className="w-3 h-3" />
             {ticket.assigned_to_profile.full_name?.split(' ')[0]}
-          </span>
-        )}
-        {ticket.estimated_time && (
-          <span className="flex items-center gap-1">
-            <Clock className="w-3 h-3" />
-            {ticket.estimated_time}m
           </span>
         )}
       </div>
@@ -65,24 +60,24 @@ function KanbanColumn({
 }: { 
   stage: TicketStage
   tickets: Ticket[]
-  onTicketClick: (ticket: Ticket) => void
+  onTicketClick: (ticketId: string) => void
 }) {
-  const config = STAGE_CONFIG[stage]
+  const config = STAGES[stage]
   
   return (
-    <div className="flex-shrink-0 w-72">
-      <div className="flex items-center gap-2 mb-3 px-1">
-        <span className={`w-2 h-2 rounded-full ${config.color}`} />
-        <h2 className="text-sm font-medium text-zinc-300">{config.label}</h2>
-        <span className="text-xs text-zinc-500 ml-auto">{tickets.length}</span>
+    <div className="flex-shrink-0 w-80">
+      <div className="flex items-center gap-2 mb-4 px-1">
+        <div className={`w-2 h-2 rounded-full ${config.color}`} />
+        <h2 className="text-sm font-bold text-[#5A5F5F] uppercase tracking-widest">{config.label}</h2>
+        <span className="text-xs text-[#8A8F8F] ml-auto font-mono bg-[#F7F7F8] px-2 py-0.5 rounded border border-[#E0E0E1]">{tickets.length}</span>
       </div>
       
-      <div className="space-y-2 min-h-[200px]">
+      <div className="space-y-3 min-h-[500px] p-2 rounded-xl bg-[#F7F7F8] border border-[#ECECED]">
         {tickets.map(ticket => (
           <TicketCard 
             key={ticket.id} 
             ticket={ticket} 
-            onClick={() => onTicketClick(ticket)}
+            onClick={() => onTicketClick(ticket.id)}
           />
         ))}
       </div>
@@ -90,7 +85,8 @@ function KanbanColumn({
   )
 }
 
-export function KanbanBoard({ onTicketClick }: { onTicketClick: (ticket: Ticket) => void }) {
+export function KanbanBoard({ onTicketClick }: { onTicketClick: (ticketId: string) => void }) {
+
   const { data: tickets, isLoading } = useTickets()
   
   const ticketsByStage = useMemo(() => {
@@ -111,7 +107,7 @@ export function KanbanBoard({ onTicketClick }: { onTicketClick: (ticket: Ticket)
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="text-zinc-500">Cargando tickets...</div>
+        <div className="text-[#8A8F8F]">Cargando tickets...</div>
       </div>
     )
   }

@@ -29,22 +29,24 @@ export function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-zinc-950">
-      <div className="glass rounded-2xl p-8 w-full max-w-md">
+    <div className="min-h-screen flex items-center justify-center bg-[#F7F7F8]">
+      <div className="bg-white rounded-2xl p-8 w-full max-w-md shadow-lg border border-[#E0E0E1]">
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-white">Mojito360</h1>
-          <p className="text-zinc-400 mt-2">Help Desk</p>
+          <h1 className="text-2xl font-bold text-[#3F4444]">
+            Mojito<span className="text-[#6353FF]">360</span>
+          </h1>
+          <p className="text-[#8A8F8F] mt-2">Help Desk</p>
         </div>
 
         <form onSubmit={handleLogin} className="space-y-4">
           {error && (
-            <div className="bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-3 rounded-lg text-sm">
+            <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-xl text-sm">
               {error}
             </div>
           )}
 
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-zinc-300 mb-2">
+            <label htmlFor="email" className="block text-sm font-medium text-[#3F4444] mb-2">
               Email
             </label>
             <input
@@ -52,14 +54,14 @@ export function LoginPage() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              className="w-full px-4 py-3 bg-white border border-[#E0E0E1] rounded-xl text-[#3F4444] placeholder-[#B0B5B5] focus:outline-none focus:ring-2 focus:ring-[#6353FF] focus:ring-opacity-30 focus:border-[#6353FF] transition-all"
               placeholder="tu@email.com"
               required
             />
           </div>
 
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-zinc-300 mb-2">
+            <label htmlFor="password" className="block text-sm font-medium text-[#3F4444] mb-2">
               Contraseña
             </label>
             <input
@@ -67,7 +69,7 @@ export function LoginPage() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              className="w-full px-4 py-3 bg-white border border-[#E0E0E1] rounded-xl text-[#3F4444] placeholder-[#B0B5B5] focus:outline-none focus:ring-2 focus:ring-[#6353FF] focus:ring-opacity-30 focus:border-[#6353FF] transition-all"
               placeholder="••••••••"
               required
             />
@@ -76,9 +78,9 @@ export function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 px-4 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
+            className="w-full py-3 px-6 bg-[#6353FF] hover:bg-[#5244e6] disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-full transition-colors lowercase"
           >
-            {loading ? 'Iniciando sesión...' : 'Iniciar sesión'}
+            {loading ? 'iniciando sesión...' : 'iniciar sesión'}
           </button>
         </form>
       </div>

@@ -128,7 +128,7 @@ export function useCreateComment() {
   const queryClient = useQueryClient()
   
   return useMutation({
-    mutationFn: async ({ ticketId, content }: { ticketId: string; content: string }) => {
+    mutationFn: async ({ ticketId, content, isInternal }: { ticketId: string; content: string; isInternal?: boolean }) => {
       const { data: { user } } = await supabase.auth.getUser()
       
       const { data, error } = await supabase
@@ -136,9 +136,10 @@ export function useCreateComment() {
         .insert({
           ticket_id: ticketId,
           user_id: user?.id,
-          content
+          content,
+          is_internal: isInternal ?? false
         })
-        .select()
+        .select('*, user:profiles(*)')
         .single()
       
       if (error) throw error
@@ -149,6 +150,7 @@ export function useCreateComment() {
     }
   })
 }
+
 
 // Entities
 export function useEntities() {
