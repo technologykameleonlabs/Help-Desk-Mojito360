@@ -35,8 +35,8 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-zinc-950">
-        <div className="text-zinc-500">Cargando...</div>
+      <div className="min-h-screen flex items-center justify-center bg-[#F7F7F8]">
+        <div className="text-[#8A8F8F]">Cargando...</div>
       </div>
     )
   }
