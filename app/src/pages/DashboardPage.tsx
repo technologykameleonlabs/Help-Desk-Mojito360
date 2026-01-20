@@ -4,6 +4,7 @@ import { Sidebar } from '../components/Sidebar'
 import { KanbanBoard } from '../components/KanbanBoard'
 import { TicketDetail } from '../components/TicketDetail'
 import { LayoutGrid, List } from 'lucide-react'
+import { useRealtimeTickets } from '../hooks/useRealtime'
 
 
 
@@ -12,11 +13,15 @@ export function DashboardPage() {
   const { id } = useParams<{ id: string }>()
   const [view, setView] = useState<'kanban' | 'list'>('kanban')
   
+  // Subscribe to realtime ticket updates
+  useRealtimeTickets()
+  
   const handleTicketClick = (ticketId: string) => {
     navigate(`/ticket/${ticketId}`)
   }
   
   return (
+
     <div className="flex h-screen bg-white overflow-hidden">
       <Sidebar />
       

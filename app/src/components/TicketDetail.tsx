@@ -5,6 +5,7 @@ import {
   useComments, 
   useCreateComment
 } from '../hooks/useData'
+import { useRealtimeComments } from '../hooks/useRealtime'
 
 import { 
   X, 
@@ -29,6 +30,10 @@ export function TicketDetail() {
   const { data: ticket, isLoading, error } = useTicket(id!)
   const { data: comments } = useComments(id!)
   const updateTicket = useUpdateTicket()
+
+  // Subscribe to realtime comment updates
+  useRealtimeComments(id!)
+
 
   const createComment = useCreateComment()
   
