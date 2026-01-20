@@ -1,10 +1,9 @@
 import { useMemo } from 'react'
 import { useTickets } from '../hooks/useData'
 import type { Ticket, TicketStage } from '../lib/supabase'
+
 import { STAGES, PRIORITIES } from '../lib/supabase'
 import { User, Building2 } from 'lucide-react'
-
-
 
 const KANBAN_STAGES: TicketStage[] = [
   'new',
@@ -85,9 +84,37 @@ function KanbanColumn({
   )
 }
 
-export function KanbanBoard({ onTicketClick }: { onTicketClick: (ticketId: string) => void }) {
+type KanbanBoardProps = {
+  onTicketClick: (ticketId: string) => void
+  searchQuery?: string
+  priorityFilter?: string
+}
 
+export function KanbanBoard({ onTicketClick, searchQuery = '', priorityFilter = '' }: KanbanBoardProps) {
   const { data: tickets, isLoading } = useTickets()
+  
+  // Apply filters
+  const filteredTickets = useMemo(() => {
+    if (!tickets) return []
+    
+    return tickets.filter(ticket => {
+      // Search filter
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase()
+        const matchesTitle = ticket.title.toLowerCase().includes(q)
+        const matchesRef = ticket.ticket_ref.toString().includes(q)
+        const matchesEntity = ticket.entity?.name.toLowerCase().includes(q)
+        if (!matchesTitle && !matchesRef && !matchesEntity) return false
+      }
+      
+      // Priority filter
+      if (priorityFilter && ticket.priority !== priorityFilter) {
+        return false
+      }
+      
+      return true
+    })
+  }, [tickets, searchQuery, priorityFilter])
   
   const ticketsByStage = useMemo(() => {
     const grouped: Record<TicketStage, Ticket[]> = {} as any
@@ -95,14 +122,14 @@ export function KanbanBoard({ onTicketClick }: { onTicketClick: (ticketId: strin
       grouped[stage] = []
     })
     
-    tickets?.forEach(ticket => {
+    filteredTickets.forEach(ticket => {
       if (KANBAN_STAGES.includes(ticket.stage)) {
         grouped[ticket.stage].push(ticket)
       }
     })
     
     return grouped
-  }, [tickets])
+  }, [filteredTickets])
   
   if (isLoading) {
     return (
@@ -125,3 +152,4 @@ export function KanbanBoard({ onTicketClick }: { onTicketClick: (ticketId: strin
     </div>
   )
 }
+
