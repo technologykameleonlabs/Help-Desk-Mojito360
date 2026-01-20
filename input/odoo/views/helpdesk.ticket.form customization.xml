@@ -1,0 +1,103 @@
+<data>
+  <xpath expr="//form[1]/sheet[1]/group[1]/group[2]/label[1]" position="replace"/>
+  <xpath expr="//field[@name='active']" position="after">
+    <field name="x_studio_aplicacion" required="x_studio_clase == &quot;Soporte&quot;"/>
+  </xpath>
+  <xpath expr="//form[1]/sheet[1]/group[1]/group[1]/field[@name='user_id']" position="after">
+    <field name="x_studio_responsable" widget="many2one_avatar_user"/>
+  </xpath>
+  <xpath expr="//field[@name='domain_user_ids']" position="after">
+    <field name="x_studio_responsable_entidad" string="Responsable Entidad" invisible="x_studio_aplicacion == &quot;Odoo&quot;" widget="char"/>
+  </xpath>
+  <xpath expr="//field[@name='priority']" position="after">
+    <xpath expr="//field[@name='partner_id']" position="move"/>
+    <xpath expr="//form[1]/sheet[1]/group[1]/group[2]/field[@name='sale_line_id'][2]" position="move"/>
+    <field name="x_studio_entidad" string="Entidad" options="{&quot;no_create&quot;:true}" invisible="x_studio_aplicacion == &quot;Odoo&quot;" domain="[&quot;&amp;&quot;, (&quot;x_studio_estado&quot;, &quot;=&quot;, &quot;Activa&quot;), (&quot;x_studio_uso&quot;, &quot;=&quot;, &quot;Producción&quot;)]"/>
+  </xpath>
+  <xpath expr="//field[@name='is_partner_phone_update']" position="before">
+    <field name="x_studio_novedad_1" string="Novedad" invisible="x_studio_aplicacion == &quot;Odoo&quot;"/>
+    <field name="x_studio_estado_temporal" string="Estado temporal" help="Estado temporal del ticket"/>
+    <field name="x_studio_margen_temporal" string="Margen temporal" help="Margen de días hasta fecha de compromiso"/>
+    <field name="x_studio_fecha_de_compromiso"/>
+    <field name="x_studio_tiempo_estimado" string="Tiempo estimado" options="{}" help="Tiempo estimado de resolución del ticket (minutos)"/>
+    <field name="x_studio_desarrollo" string="Desarrollo"/>
+    <field name="x_studio_url_ticket" string="URL Ticket" widget="url" invisible="x_studio_aplicacion == &quot;Odoo&quot;"/>
+    <field name="x_studio_url_sharepoint" string="URL SharePoint" widget="url"/>
+  </xpath>
+  <xpath expr="//field[@name='partner_phone']" position="attributes">
+    <attribute name="invisible">True</attribute>
+  </xpath>
+  <xpath expr="//field[@name='email_cc']" position="attributes">
+    <attribute name="invisible">True</attribute>
+  </xpath>
+  <xpath expr="//field[@name='display_invoice_button']" position="after">
+    <xpath expr="//form[1]/sheet[1]/group[1]/group[2]/field[@name='sale_order_id'][2]" position="move"/>
+    <xpath expr="//field[@name='commercial_partner_id']" position="move"/>
+  </xpath>
+  <xpath expr="//field[@name='analytic_account_id']" position="after">
+    <field name="create_date"/>
+    <field name="x_studio_id_externo" string="Id Externo"/>
+  </xpath>
+  <xpath expr="//form[1]/sheet[1]/notebook[1]" position="inside">
+    <page string="Clasificación" name="studio_page_2vr_1hfrb7ft8">
+      <group name="studio_group_2vr">
+        <group name="studio_group_2vr_left">
+          <field name="x_studio_clase" string="Clase" required="x_studio_aplicacion"/>
+          <field name="x_studio_origen_1" string="Origen" required="x_studio_clase in [&quot;Soporte&quot;, &quot;Desarrollo&quot;]"/>
+          <field name="x_studio_canal" string="Canal" required="x_studio_clase in [&quot;Soporte&quot;, &quot;Desarrollo&quot;]"/>
+          <field name="x_studio_tipo" string="Tipo" required="x_studio_clase in [&quot;Soporte&quot;, &quot;Desarrollo&quot;]"/>
+          <xpath expr="//field[@name='ticket_type_id']" position="move"/>
+        </group>
+        <group name="studio_group_2vr_right"/>
+      </group>
+    </page>
+  </xpath>
+  <xpath expr="//group[@name='studio_group_2vr_right']" position="inside">
+    <xpath expr="//field[@name='ticket_type_id']" position="move"/>
+    <xpath expr="//field[@name='tag_ids']" position="move"/>
+  </xpath>
+  <xpath expr="//form[1]/sheet[1]/notebook[1]" position="inside">
+    <page string="Controles" name="studio_page_6e4_1hfrc4boi" invisible="x_studio_aplicacion == &quot;Odoo&quot;">
+      <group name="studio_group_6e4">
+        <group name="studio_group_6e4_left">
+          </group>
+        <group name="studio_group_6e4_right"/>
+      </group>
+    </page>
+    <page string="Solución" name="studio_page_3ge_1hftn3avs">
+      <group name="studio_group_3ge">
+        <field name="x_studio_responsabilidad" string="Responsabilidad" required="stage_id == 11"/>
+        <field name="x_studio_solucion" string="Solución" options="{}" required="stage_id in [11]"/>
+      </group>
+    </page>
+    <page string="Actas" name="studio_page_9n3_1hfu45cpc">
+      <group name="studio_group_9n3">
+        </group>
+    </page>
+    <page string="Tickets" name="studio_page_379_1hhukfvna" invisible="x_studio_clase == &quot;Soporte&quot;">
+      <group name="studio_group_379">
+        <field name="x_studio_tickets_desarrollo" string="Tickets asociados"/>
+      </group>
+    </page>
+    <page string="Wimtruck" name="studio_page_4gv_1hk6n2tag" invisible="False">
+      <group name="studio_group_4gv">
+        <group name="studio_group_4gv_left">
+          <field name="x_studio_puerto_wt"/>
+          <field name="x_studio_transportista_wt"/>
+        </group>
+        <group name="studio_group_4gv_right">
+          <field name="x_studio_x_internet_message_id" force_save="1" readonly="True" invisible="True"/>
+          <field name="x_studio_x_internet_message_id_1" force_save="0" readonly="False"/>
+        </group>
+      </group>
+    </page>
+  </xpath>
+  <xpath expr="//field[@name='ticket_type_id']" position="attributes">
+    <attribute name="required">False</attribute>
+    <attribute name="string">Categoría</attribute>
+  </xpath>
+  <xpath expr="//field[@name='partner_id']" position="attributes">
+    <attribute name="invisible">True</attribute>
+    <attribute name="widget">many2one_avatar</attribute>
+  </xpath>
+</data>
