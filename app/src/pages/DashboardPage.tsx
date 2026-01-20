@@ -3,8 +3,10 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { Sidebar } from '../components/Sidebar'
 import { KanbanBoard } from '../components/KanbanBoard'
 import { TicketDetail } from '../components/TicketDetail'
-import { LayoutGrid, List, Search, X, Filter, ChevronDown } from 'lucide-react'
+import { TicketList } from '../components/TicketList'
+import { LayoutGrid, List, Search, X, Filter, ChevronDown, Loader2 } from 'lucide-react'
 import { useRealtimeTickets } from '../hooks/useRealtime'
+import { useFilteredTickets } from '../hooks/useFilteredTickets'
 import { useEntities, useProfiles } from '../hooks/useData'
 import { STAGES } from '../lib/supabase'
 
@@ -64,8 +66,41 @@ export function DashboardPage() {
   }
 
   const activeFilterCount = Object.values(filters).filter(v => v).length
+
+  // List View Content Component (uses useFilteredTickets)
+  function ListViewContent({ 
+    filters, 
+    onTicketClick 
+  }: { 
+    filters: TicketFilters
+    onTicketClick: (ticketId: string) => void 
+  }) {
+    const { tickets, allTickets, isLoading } = useFilteredTickets(filters)
+    
+    if (isLoading) {
+      return (
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="w-8 h-8 animate-spin text-[#6353FF]" />
+        </div>
+      )
+    }
+
+    const hasFilters = Object.values(filters).some(v => v)
+
+    return (
+      <div>
+        {hasFilters && (
+          <div className="mb-4 text-sm text-[#8A8F8F]">
+            Mostrando <span className="font-semibold text-[#3F4444]">{tickets.length}</span> de {allTickets.length} tickets
+          </div>
+        )}
+        <TicketList tickets={tickets} onTicketClick={onTicketClick} />
+      </div>
+    )
+  }
   
   return (
+
     <div className="flex h-screen bg-white overflow-hidden">
       <Sidebar />
       
@@ -255,9 +290,14 @@ export function DashboardPage() {
                 filters={filters}
               />
             ) : (
-              <div className="text-[#8A8F8F]">Vista de lista - próximamente</div>
+              <ListViewContent 
+                filters={filters}
+                onTicketClick={handleTicketClick}
+              />
             )}
           </div>
+
+
         </main>
 
         {id && <TicketDetail />}
