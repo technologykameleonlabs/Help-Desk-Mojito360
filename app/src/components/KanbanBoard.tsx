@@ -1,9 +1,9 @@
 import { useMemo } from 'react'
 import { useTickets } from '../hooks/useData'
 import type { Ticket, TicketStage } from '../lib/supabase'
-
 import { STAGES, PRIORITIES } from '../lib/supabase'
 import { User, Building2 } from 'lucide-react'
+import type { TicketFilters } from '../pages/DashboardPage'
 
 const KANBAN_STAGES: TicketStage[] = [
   'new',
@@ -86,21 +86,20 @@ function KanbanColumn({
 
 type KanbanBoardProps = {
   onTicketClick: (ticketId: string) => void
-  searchQuery?: string
-  priorityFilter?: string
+  filters: TicketFilters
 }
 
-export function KanbanBoard({ onTicketClick, searchQuery = '', priorityFilter = '' }: KanbanBoardProps) {
+export function KanbanBoard({ onTicketClick, filters }: KanbanBoardProps) {
   const { data: tickets, isLoading } = useTickets()
   
-  // Apply filters
+  // Apply all filters
   const filteredTickets = useMemo(() => {
     if (!tickets) return []
     
     return tickets.filter(ticket => {
-      // Search filter
-      if (searchQuery) {
-        const q = searchQuery.toLowerCase()
+      // Search filter (title, ref, entity name)
+      if (filters.search) {
+        const q = filters.search.toLowerCase()
         const matchesTitle = ticket.title.toLowerCase().includes(q)
         const matchesRef = ticket.ticket_ref.toString().includes(q)
         const matchesEntity = ticket.entity?.name.toLowerCase().includes(q)
@@ -108,13 +107,42 @@ export function KanbanBoard({ onTicketClick, searchQuery = '', priorityFilter = 
       }
       
       // Priority filter
-      if (priorityFilter && ticket.priority !== priorityFilter) {
+      if (filters.priority && ticket.priority !== filters.priority) {
         return false
+      }
+      
+      // Stage filter
+      if (filters.stage && ticket.stage !== filters.stage) {
+        return false
+      }
+      
+      // Entity filter
+      if (filters.entity && ticket.entity_id !== filters.entity) {
+        return false
+      }
+      
+      // Application filter
+      if (filters.application && ticket.application !== filters.application) {
+        return false
+      }
+      
+      // Classification filter
+      if (filters.classification && ticket.classification !== filters.classification) {
+        return false
+      }
+      
+      // Assigned to filter
+      if (filters.assignedTo) {
+        if (filters.assignedTo === 'unassigned') {
+          if (ticket.assigned_to) return false
+        } else {
+          if (ticket.assigned_to !== filters.assignedTo) return false
+        }
       }
       
       return true
     })
-  }, [tickets, searchQuery, priorityFilter])
+  }, [tickets, filters])
   
   const ticketsByStage = useMemo(() => {
     const grouped: Record<TicketStage, Ticket[]> = {} as any
@@ -138,18 +166,29 @@ export function KanbanBoard({ onTicketClick, searchQuery = '', priorityFilter = 
       </div>
     )
   }
+
+  const totalFiltered = filteredTickets.length
+  const totalAll = tickets?.length || 0
   
   return (
-    <div className="flex gap-4 overflow-x-auto pb-4">
-      {KANBAN_STAGES.map(stage => (
-        <KanbanColumn 
-          key={stage} 
-          stage={stage} 
-          tickets={ticketsByStage[stage]}
-          onTicketClick={onTicketClick}
-        />
-      ))}
+    <div>
+      {/* Results count */}
+      {(filters.search || filters.priority || filters.stage || filters.entity || filters.application || filters.classification || filters.assignedTo) && (
+        <div className="mb-4 text-sm text-[#8A8F8F]">
+          Mostrando <span className="font-semibold text-[#3F4444]">{totalFiltered}</span> de {totalAll} tickets
+        </div>
+      )}
+      
+      <div className="flex gap-4 overflow-x-auto pb-4">
+        {KANBAN_STAGES.map(stage => (
+          <KanbanColumn 
+            key={stage} 
+            stage={stage} 
+            tickets={ticketsByStage[stage]}
+            onTicketClick={onTicketClick}
+          />
+        ))}
+      </div>
     </div>
   )
 }
-
