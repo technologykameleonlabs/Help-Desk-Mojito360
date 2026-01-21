@@ -1,14 +1,16 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import type { Ticket, Entity, Profile, Comment, TicketStage, TicketPriority } from '../lib/supabase'
 
+// Closed/archived stages to filter out by default
+const CLOSED_STAGES: TicketStage[] = ['done', 'cancelled', 'paused']
 
-// Tickets
-export function useTickets() {
+// Tickets (default: only open tickets)
+export function useTickets(includeArchived: boolean = false) {
   return useQuery({
-    queryKey: ['tickets'],
+    queryKey: ['tickets', { includeArchived }],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('tickets')
         .select(`
           *,
@@ -18,11 +20,55 @@ export function useTickets() {
         `)
         .order('created_at', { ascending: false })
       
+      // Filter out closed tickets by default
+      if (!includeArchived) {
+        query = query.not('stage', 'in', `(${CLOSED_STAGES.join(',')})`)
+      }
+      
+      const { data, error } = await query
+      
       if (error) throw error
       return data as Ticket[]
     }
   })
 }
+
+// Paginated tickets (for large datasets)
+const PAGE_SIZE = 20
+
+export function useTicketsPaginated(includeArchived: boolean = false) {
+  return useInfiniteQuery({
+    queryKey: ['tickets', 'paginated', { includeArchived }],
+    queryFn: async ({ pageParam = 0 }) => {
+      let query = supabase
+        .from('tickets')
+        .select(`
+          *,
+          assigned_to_profile:profiles!tickets_assigned_to_fkey(*),
+          created_by_profile:profiles!tickets_created_by_fkey(*),
+          entity:entities(*)
+        `)
+        .order('created_at', { ascending: false })
+        .range(pageParam * PAGE_SIZE, (pageParam + 1) * PAGE_SIZE - 1)
+      
+      // Filter out closed tickets by default
+      if (!includeArchived) {
+        query = query.not('stage', 'in', `(${CLOSED_STAGES.join(',')})`)
+      }
+      
+      const { data, error } = await query
+      
+      if (error) throw error
+      return {
+        tickets: data as Ticket[],
+        nextPage: data.length === PAGE_SIZE ? pageParam + 1 : undefined
+      }
+    },
+    getNextPageParam: (lastPage) => lastPage.nextPage,
+    initialPageParam: 0
+  })
+}
+
 
 export function useTicket(id: string) {
   return useQuery({

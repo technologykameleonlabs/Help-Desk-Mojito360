@@ -3,9 +3,12 @@ import {
   useTicket, 
   useUpdateTicket, 
   useComments, 
-  useCreateComment
+  useCreateComment,
+  useProfiles
 } from '../hooks/useData'
+import { useCreateMentionNotifications } from '../hooks/useNotifications'
 import { useRealtimeComments } from '../hooks/useRealtime'
+import { MentionTextarea, extractMentions } from './MentionTextarea'
 
 import { 
   X, 
@@ -19,7 +22,7 @@ import {
   AlertCircle
 } from 'lucide-react'
 import { STAGES, PRIORITIES, type TicketStage, type TicketPriority } from '../lib/supabase'
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { clsx } from 'clsx'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
@@ -29,16 +32,25 @@ export function TicketDetail() {
   const navigate = useNavigate()
   const { data: ticket, isLoading, error } = useTicket(id!)
   const { data: comments } = useComments(id!)
+  const { data: profiles } = useProfiles()
   const updateTicket = useUpdateTicket()
 
   // Subscribe to realtime comment updates
   useRealtimeComments(id!)
 
-
   const createComment = useCreateComment()
+  const createMentionNotifications = useCreateMentionNotifications()
   
   const [commentText, setCommentText] = useState('')
   const [isInternal, setIsInternal] = useState(false)
+  const [mentionedUserIds, setMentionedUserIds] = useState<string[]>([])
+
+  // Track mentions as user types
+  const handleMention = useCallback((userId: string) => {
+    setMentionedUserIds(prev => 
+      prev.includes(userId) ? prev : [...prev, userId]
+    )
+  }, [])
 
   if (isLoading) {
     return (
@@ -81,14 +93,30 @@ export function TicketDetail() {
     if (!commentText.trim()) return
 
     try {
-      await createComment.mutateAsync({
+      // Create the comment
+      const result = await createComment.mutateAsync({
         ticketId: ticket.id,
         content: commentText,
         isInternal
       })
-      setCommentText('')
-    } catch (e) {
 
+      // Extract all mentioned users from the text
+      const allMentions = profiles 
+        ? extractMentions(commentText, profiles) 
+        : mentionedUserIds
+      
+      // Create notifications for mentioned users
+      if (allMentions.length > 0 && result?.id) {
+        await createMentionNotifications.mutateAsync({
+          commentId: result.id,
+          ticketId: ticket.id,
+          mentionedUserIds: allMentions
+        })
+      }
+
+      setCommentText('')
+      setMentionedUserIds([])
+    } catch (e) {
       console.error(e)
     }
   }
@@ -216,15 +244,16 @@ export function TicketDetail() {
         </div>
       </div>
 
-      {/* Comment Input */}
+      {/* Comment Input with Mentions */}
       <footer className="p-4 border-t border-[#E0E0E1] bg-white">
         <form onSubmit={handleAddComment} className="space-y-3">
           <div className="relative">
-            <textarea
+            <MentionTextarea
               value={commentText}
-              onChange={(e) => setCommentText(e.target.value)}
-              placeholder="Escribe un comentario..."
-              className="w-full bg-[#F7F7F8] border border-[#E0E0E1] rounded-xl px-4 py-3 text-sm text-[#3F4444] placeholder:text-[#B0B5B5] outline-none focus:border-[#6353FF] transition-all resize-none min-h-[100px]"
+              onChange={setCommentText}
+              onMention={handleMention}
+              placeholder="Escribe un comentario... (usa @ para mencionar)"
+              className="w-full bg-[#F7F7F8] border border-[#E0E0E1] rounded-xl px-4 py-3 pr-12 text-sm text-[#3F4444] placeholder:text-[#B0B5B5] outline-none focus:border-[#6353FF] transition-all resize-none min-h-[100px]"
             />
             <button
               type="submit"
