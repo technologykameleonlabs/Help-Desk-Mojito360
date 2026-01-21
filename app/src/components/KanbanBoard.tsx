@@ -1,9 +1,26 @@
-import { useMemo } from 'react'
-import { useTickets } from '../hooks/useData'
+import { useMemo, useState, forwardRef, type CSSProperties } from 'react'
+import { useTickets, useUpdateTicket } from '../hooks/useData'
 import type { Ticket, TicketStage } from '../lib/supabase'
 import { STAGES, PRIORITIES } from '../lib/supabase'
 import { User, Building2 } from 'lucide-react'
 import type { TicketFilters } from '../pages/DashboardPage'
+import { ConfirmModal } from './ConfirmModal'
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  useDroppable,
+  type DragEndEvent,
+  type DragStartEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 
 const KANBAN_STAGES: TicketStage[] = [
   'new',
@@ -15,13 +32,36 @@ const KANBAN_STAGES: TicketStage[] = [
   'done'
 ]
 
-function TicketCard({ ticket, onClick }: { ticket: Ticket; onClick: () => void }) {
+type TicketCardProps = {
+  ticket: Ticket
+  onClick?: () => void
+  isDragging?: boolean
+  isOverlay?: boolean
+  style?: CSSProperties
+  dragAttributes?: React.HTMLAttributes<HTMLDivElement>
+  dragListeners?: React.HTMLAttributes<HTMLDivElement>
+}
+
+const TicketCard = forwardRef<HTMLDivElement, TicketCardProps>(function TicketCard(
+  { ticket, onClick, isDragging, isOverlay, style, dragAttributes, dragListeners },
+  ref
+) {
   const priority = PRIORITIES[ticket.priority]
-  
+  const handleClick = () => {
+    if (isDragging) return
+    onClick?.()
+  }
+
   return (
     <div
-      onClick={onClick}
-      className="bg-white border border-[#E0E0E1] rounded-xl p-3 cursor-pointer hover:border-[#6353FF] hover:shadow-md transition-all group"
+      ref={ref}
+      onClick={handleClick}
+      style={style}
+      className={`bg-white border border-[#E0E0E1] rounded-xl p-3 cursor-pointer transition-all group ${
+        isOverlay ? 'shadow-lg border-[#6353FF]' : 'hover:border-[#6353FF] hover:shadow-md'
+      }`}
+      {...dragAttributes}
+      {...dragListeners}
     >
       <div className="flex items-start justify-between gap-2 mb-2">
         <span className="text-xs font-mono text-[#8A8F8F]">#{ticket.ticket_ref}</span>
@@ -50,6 +90,30 @@ function TicketCard({ ticket, onClick }: { ticket: Ticket; onClick: () => void }
       </div>
     </div>
   )
+})
+
+function SortableTicketCard({ ticket, onClick }: { ticket: Ticket; onClick: () => void }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: ticket.id,
+    data: { stage: ticket.stage },
+  })
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.6 : 1,
+  }
+
+  return (
+    <TicketCard
+      ref={setNodeRef}
+      ticket={ticket}
+      onClick={onClick}
+      isDragging={isDragging}
+      style={style}
+      dragAttributes={attributes}
+      dragListeners={listeners}
+    />
+  )
 }
 
 function KanbanColumn({ 
@@ -62,6 +126,10 @@ function KanbanColumn({
   onTicketClick: (ticketId: string) => void
 }) {
   const config = STAGES[stage]
+  const { setNodeRef } = useDroppable({
+    id: stage,
+    data: { stage },
+  })
   
   return (
     <div className="flex-shrink-0 w-80">
@@ -71,14 +139,19 @@ function KanbanColumn({
         <span className="text-xs text-[#8A8F8F] ml-auto font-mono bg-[#F7F7F8] px-2 py-0.5 rounded border border-[#E0E0E1]">{tickets.length}</span>
       </div>
       
-      <div className="space-y-3 min-h-[500px] p-2 rounded-xl bg-[#F7F7F8] border border-[#ECECED]">
-        {tickets.map(ticket => (
-          <TicketCard 
-            key={ticket.id} 
-            ticket={ticket} 
-            onClick={() => onTicketClick(ticket.id)}
-          />
-        ))}
+      <div
+        ref={setNodeRef}
+        className="space-y-3 min-h-[500px] p-2 rounded-xl bg-[#F7F7F8] border border-[#ECECED]"
+      >
+        <SortableContext items={tickets.map(ticket => ticket.id)} strategy={verticalListSortingStrategy}>
+          {tickets.map(ticket => (
+            <SortableTicketCard
+              key={ticket.id}
+              ticket={ticket}
+              onClick={() => onTicketClick(ticket.id)}
+            />
+          ))}
+        </SortableContext>
       </div>
     </div>
   )
@@ -91,6 +164,16 @@ type KanbanBoardProps = {
 
 export function KanbanBoard({ onTicketClick, filters }: KanbanBoardProps) {
   const { data: tickets, isLoading } = useTickets()
+  const updateTicket = useUpdateTicket()
+  const [activeTicketId, setActiveTicketId] = useState<string | null>(null)
+  const [pendingMove, setPendingMove] = useState<{
+    ticketId: string
+    fromStage: TicketStage
+    toStage: TicketStage
+  } | null>(null)
+  const [isConfirming, setIsConfirming] = useState(false)
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
   
   // Apply all filters (supports multi-select arrays)
   const filteredTickets = useMemo(() => {
@@ -163,6 +246,40 @@ export function KanbanBoard({ onTicketClick, filters }: KanbanBoardProps) {
     
     return grouped
   }, [filteredTickets])
+
+  const ticketsById = useMemo(() => {
+    const map = new Map<string, Ticket>()
+    filteredTickets.forEach(ticket => {
+      map.set(ticket.id, ticket)
+    })
+    return map
+  }, [filteredTickets])
+
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveTicketId(event.active.id as string)
+  }
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event
+    setActiveTicketId(null)
+    if (!over) return
+
+    const activeTicket = ticketsById.get(active.id as string)
+    if (!activeTicket) return
+
+    const overStage = (over.data.current?.stage as TicketStage | undefined) ||
+      (ticketsById.get(over.id as string)?.stage)
+
+    if (!overStage || overStage === activeTicket.stage) return
+
+    setPendingMove({
+      ticketId: activeTicket.id,
+      fromStage: activeTicket.stage,
+      toStage: overStage,
+    })
+  }
+
+  const activeTicket = activeTicketId ? ticketsById.get(activeTicketId) : null
   
   if (isLoading) {
     return (
@@ -193,16 +310,61 @@ export function KanbanBoard({ onTicketClick, filters }: KanbanBoardProps) {
         </div>
       )}
       
-      <div className="flex gap-4 overflow-x-auto pb-4">
-        {KANBAN_STAGES.map(stage => (
-          <KanbanColumn 
-            key={stage} 
-            stage={stage} 
-            tickets={ticketsByStage[stage]}
-            onTicketClick={onTicketClick}
-          />
-        ))}
-      </div>
+      <DndContext
+        sensors={sensors}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+        onDragCancel={() => setActiveTicketId(null)}
+      >
+        <div className="flex gap-4 overflow-x-auto pb-4">
+          {KANBAN_STAGES.map(stage => (
+            <KanbanColumn 
+              key={stage} 
+              stage={stage} 
+              tickets={ticketsByStage[stage]}
+              onTicketClick={onTicketClick}
+            />
+          ))}
+        </div>
+        <DragOverlay>
+          {activeTicket ? <TicketCard ticket={activeTicket} isOverlay /> : null}
+        </DragOverlay>
+      </DndContext>
+
+      <ConfirmModal
+        open={!!pendingMove}
+        title={
+          pendingMove
+            ? `Está seguro que desea editar el estado del ticket #${ticketsById.get(pendingMove.ticketId)?.ticket_ref}?`
+            : ''
+        }
+        description={
+          pendingMove ? (
+            <div className="flex items-center gap-2 text-sm text-[#5A5F5F]">
+              <span className="font-semibold">{STAGES[pendingMove.fromStage].label}</span>
+              <span className="text-[#8A8F8F]">→</span>
+              <span className="font-semibold">{STAGES[pendingMove.toStage].label}</span>
+            </div>
+          ) : null
+        }
+        confirmText="Aceptar"
+        cancelText="Cancelar"
+        isConfirming={isConfirming}
+        onCancel={() => setPendingMove(null)}
+        onConfirm={async () => {
+          if (!pendingMove) return
+          setIsConfirming(true)
+          try {
+            await updateTicket.mutateAsync({ id: pendingMove.ticketId, stage: pendingMove.toStage })
+            setPendingMove(null)
+          } catch (error) {
+            console.error(error)
+            alert('No se pudo actualizar el estado del ticket.')
+          } finally {
+            setIsConfirming(false)
+          }
+        }}
+      />
     </div>
   )
 }

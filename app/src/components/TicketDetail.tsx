@@ -4,7 +4,8 @@ import {
   useUpdateTicket, 
   useComments, 
   useCreateComment,
-  useProfiles
+  useProfiles,
+  useEntities
 } from '../hooks/useData'
 import { useCreateMentionNotifications } from '../hooks/useNotifications'
 import { useRealtimeComments } from '../hooks/useRealtime'
@@ -19,13 +20,23 @@ import {
   MessageSquare, 
   Send,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  ExternalLink,
+  History
 } from 'lucide-react'
-import { STAGES, PRIORITIES, type TicketStage, type TicketPriority } from '../lib/supabase'
-import { useState, useCallback } from 'react'
+import { STAGES, PRIORITIES, type TicketStage, type TicketPriority, type Ticket } from '../lib/supabase'
+import { useState, useCallback, useMemo, useEffect } from 'react'
 import { clsx } from 'clsx'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
+
+const TICKET_TYPES = [
+  '🔔 Alertas', '🔼 Carga', '💽 Dato', '📝 Documentos', 
+  '📡 Integración', '📈 Reportes', '👤 Usuarios', '✏️ Modificación', 
+  '⏱️ Rendimiento', '💕 Mapeos', '💎 Gestión del soporte', '🔎 Control'
+]
+
+type EditableField = 'stage' | 'priority' | 'entity_id' | 'assigned_to' | 'ticket_type'
 
 export function TicketDetail() {
   const { id } = useParams<{ id: string }>()
@@ -33,6 +44,7 @@ export function TicketDetail() {
   const { data: ticket, isLoading, error } = useTicket(id!)
   const { data: comments } = useComments(id!)
   const { data: profiles } = useProfiles()
+  const { data: entities } = useEntities()
   const updateTicket = useUpdateTicket()
 
   // Subscribe to realtime comment updates
@@ -44,6 +56,34 @@ export function TicketDetail() {
   const [commentText, setCommentText] = useState('')
   const [isInternal, setIsInternal] = useState(false)
   const [mentionedUserIds, setMentionedUserIds] = useState<string[]>([])
+  const [editingFields, setEditingFields] = useState<Set<EditableField>>(new Set())
+  const [saveMessage, setSaveMessage] = useState<string | null>(null)
+
+  const [draft, setDraft] = useState({
+    stage: '' as TicketStage,
+    priority: '' as TicketPriority,
+    entity_id: '' as string,
+    assigned_to: '' as string,
+    ticket_type: '' as string,
+  })
+
+  useEffect(() => {
+    if (!ticket) return
+    setDraft({
+      stage: ticket.stage,
+      priority: ticket.priority,
+      entity_id: ticket.entity_id || '',
+      assigned_to: ticket.assigned_to || '',
+      ticket_type: ticket.ticket_type || '',
+    })
+    setEditingFields(new Set())
+  }, [ticket])
+
+  useEffect(() => {
+    if (!saveMessage) return
+    const timeout = setTimeout(() => setSaveMessage(null), 3000)
+    return () => clearTimeout(timeout)
+  }, [saveMessage])
 
   // Track mentions as user types
   const handleMention = useCallback((userId: string) => {
@@ -51,6 +91,17 @@ export function TicketDetail() {
       prev.includes(userId) ? prev : [...prev, userId]
     )
   }, [])
+
+  const hasChanges = useMemo(() => {
+    if (!ticket) return false
+    return (
+      draft.stage !== ticket.stage ||
+      draft.priority !== ticket.priority ||
+      (draft.entity_id || null) !== ticket.entity_id ||
+      (draft.assigned_to || null) !== ticket.assigned_to ||
+      (draft.ticket_type || '') !== (ticket.ticket_type || '')
+    )
+  }, [draft, ticket])
 
   if (isLoading) {
     return (
@@ -70,22 +121,6 @@ export function TicketDetail() {
         </button>
       </div>
     )
-  }
-
-  const handleUpdateStage = async (newStage: TicketStage) => {
-    try {
-      await updateTicket.mutateAsync({ id: ticket.id, stage: newStage })
-    } catch (e) {
-      console.error(e)
-    }
-  }
-
-  const handleUpdatePriority = async (newPriority: TicketPriority) => {
-    try {
-      await updateTicket.mutateAsync({ id: ticket.id, priority: newPriority })
-    } catch (e) {
-      console.error(e)
-    }
   }
 
   const handleAddComment = async (e: React.FormEvent) => {
@@ -121,85 +156,287 @@ export function TicketDetail() {
     }
   }
 
+  const handleApplyChanges = async () => {
+    if (!hasChanges) return
+    try {
+      const updates: Partial<Ticket> & { id: string } = { id: ticket.id }
+      if (draft.stage !== ticket.stage) updates.stage = draft.stage
+      if (draft.priority !== ticket.priority) updates.priority = draft.priority
+      if ((draft.entity_id || null) !== ticket.entity_id) updates.entity_id = draft.entity_id || null
+      if ((draft.assigned_to || null) !== ticket.assigned_to) updates.assigned_to = draft.assigned_to || null
+      if ((draft.ticket_type || '') !== (ticket.ticket_type || '')) updates.ticket_type = draft.ticket_type || null
+
+      await updateTicket.mutateAsync(updates)
+      setSaveMessage('Cambios guardados correctamente.')
+      setEditingFields(new Set())
+    } catch (e) {
+      console.error(e)
+      alert('No se pudo actualizar el ticket.')
+    }
+  }
+
+  const handleCancelChanges = () => {
+    setDraft({
+      stage: ticket.stage,
+      priority: ticket.priority,
+      entity_id: ticket.entity_id || '',
+      assigned_to: ticket.assigned_to || '',
+      ticket_type: ticket.ticket_type || '',
+    })
+    setEditingFields(new Set())
+  }
+
+  const enableEdit = (field: EditableField) => {
+    setEditingFields(prev => {
+      const next = new Set(prev)
+      next.add(field)
+      return next
+    })
+  }
+
+  const entityOptions = entities?.map(entity => ({
+    value: entity.id,
+    label: entity.name,
+  })) || []
+
+  const profileOptions = [
+    { value: '', label: 'Sin asignar' },
+    ...(profiles?.map(profile => ({
+      value: profile.id,
+      label: profile.full_name || profile.email || 'Usuario',
+    })) || [])
+  ]
+
   return (
-    <div className="flex flex-col h-full bg-white border-l border-[#E0E0E1] w-[500px] animate-in slide-in-from-right duration-300 shadow-xl relative z-20">
+    <div className="flex flex-col h-full bg-white border-l border-[#E0E0E1] w-[900px] animate-in slide-in-from-right duration-300 shadow-xl relative z-20">
       {/* Header */}
       <header className="flex items-center justify-between px-6 py-4 border-b border-[#E0E0E1]">
         <div className="flex items-center gap-3">
           <span className="text-[#8A8F8F] font-mono text-sm">#{ticket.ticket_ref}</span>
           <h2 className="text-[#3F4444] font-semibold flex-1 line-clamp-1">{ticket.title}</h2>
         </div>
-        <button 
-          onClick={() => navigate('/')}
-          className="p-1.5 hover:bg-[#F7F7F8] rounded-lg text-[#8A8F8F] transition-colors"
-        >
-          <X className="w-5 h-5" />
-        </button>
+        <div className="flex items-center gap-2">
+          <a
+            href={`https://sso.mojito360.com/resources/support/detail-case/${ticket.ticket_ref}`}
+            target="_blank"
+            rel="noreferrer"
+            className="p-1.5 hover:bg-[#F7F7F8] rounded-lg text-[#8A8F8F] transition-colors"
+            title="Abrir en Mojito360"
+          >
+            <ExternalLink className="w-5 h-5" />
+          </a>
+          <button 
+            onClick={() => navigate('/')}
+            className="p-1.5 hover:bg-[#F7F7F8] rounded-lg text-[#8A8F8F] transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
       </header>
 
       {/* Content */}
       <div className="flex-1 overflow-auto">
         {/* Quick Actions */}
         <div className="p-6 space-y-6">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-[10px] uppercase font-bold text-[#8A8F8F] tracking-wider">Estado</label>
-              <select
-                value={ticket.stage}
-                onChange={(e) => handleUpdateStage(e.target.value as TicketStage)}
-                className="w-full bg-white border border-[#E0E0E1] rounded-xl px-3 py-2 text-sm text-[#3F4444] outline-none focus:ring-1 focus:ring-[#6353FF] transition-all"
-              >
-                {Object.entries(STAGES).map(([key, value]) => (
-                  <option key={key} value={key}>{(value as any).label}</option>
-                ))}
-              </select>
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-[10px] uppercase font-bold text-[#8A8F8F] tracking-wider">Prioridad</label>
-              <select
-                value={ticket.priority}
-                onChange={(e) => handleUpdatePriority(e.target.value as TicketPriority)}
-                className="w-full bg-white border border-[#E0E0E1] rounded-xl px-3 py-2 text-sm text-[#3F4444] outline-none focus:ring-1 focus:ring-[#6353FF] transition-all"
-              >
-                {Object.entries(PRIORITIES).map(([key, value]) => (
-                  <option key={key} value={key}>{(value as any).label}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
           {/* Properties */}
           <div className="space-y-4 py-4 border-y border-[#E0E0E1]">
-            <div className="flex items-center text-sm gap-3">
-              <Building2 className="w-4 h-4 text-[#8A8F8F]" />
-              <span className="text-[#8A8F8F] w-24">Entidad</span>
-              <span className="text-[#3F4444] font-medium">{ticket.entity?.name || '---'}</span>
+            <div className="grid grid-cols-2 gap-6">
+              <div className="space-y-4">
+                <div className="flex items-start text-sm gap-3">
+                  <Tag className="w-4 h-4 text-[#8A8F8F] mt-0.5" />
+                  <div className="flex-1">
+                    <span className="text-[#8A8F8F] block">Estado</span>
+                    {editingFields.has('stage') ? (
+                      <select
+                        value={draft.stage}
+                        onChange={(e) => setDraft(prev => ({ ...prev, stage: e.target.value as TicketStage }))}
+                        className="mt-1 w-full bg-white border border-[#E0E0E1] rounded-xl px-3 py-2 text-sm text-[#3F4444] outline-none focus:ring-1 focus:ring-[#6353FF] transition-all"
+                      >
+                        {Object.entries(STAGES).map(([key, value]) => (
+                          <option key={key} value={key}>{(value as any).label}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => enableEdit('stage')}
+                        className="text-left text-[#3F4444] font-medium hover:text-[#6353FF] transition-colors"
+                      >
+                        {STAGES[ticket.stage].label}
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-start text-sm gap-3">
+                  <AlertCircle className="w-4 h-4 text-[#8A8F8F] mt-0.5" />
+                  <div className="flex-1">
+                    <span className="text-[#8A8F8F] block">Prioridad</span>
+                    {editingFields.has('priority') ? (
+                      <select
+                        value={draft.priority}
+                        onChange={(e) => setDraft(prev => ({ ...prev, priority: e.target.value as TicketPriority }))}
+                        className="mt-1 w-full bg-white border border-[#E0E0E1] rounded-xl px-3 py-2 text-sm text-[#3F4444] outline-none focus:ring-1 focus:ring-[#6353FF] transition-all"
+                      >
+                        {Object.entries(PRIORITIES).map(([key, value]) => (
+                          <option key={key} value={key}>{(value as any).label}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => enableEdit('priority')}
+                        className="text-left text-[#3F4444] font-medium hover:text-[#6353FF] transition-colors"
+                      >
+                        {PRIORITIES[ticket.priority].label}
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-start text-sm gap-3">
+                  <Building2 className="w-4 h-4 text-[#8A8F8F] mt-0.5" />
+                  <div className="flex-1">
+                    <span className="text-[#8A8F8F] block">Entidad</span>
+                    {editingFields.has('entity_id') ? (
+                      <select
+                        value={draft.entity_id}
+                        onChange={(e) => setDraft(prev => ({ ...prev, entity_id: e.target.value }))}
+                        className="mt-1 w-full bg-white border border-[#E0E0E1] rounded-xl px-3 py-2 text-sm text-[#3F4444] outline-none focus:ring-1 focus:ring-[#6353FF] transition-all"
+                      >
+                        <option value="">Sin entidad</option>
+                        {entityOptions.map(option => (
+                          <option key={option.value} value={option.value}>{option.label}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => enableEdit('entity_id')}
+                        className="text-left text-[#3F4444] font-medium hover:text-[#6353FF] transition-colors"
+                      >
+                        {ticket.entity?.name || '---'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-start text-sm gap-3">
+                  <User className="w-4 h-4 text-[#8A8F8F] mt-0.5" />
+                  <div className="flex-1">
+                    <span className="text-[#8A8F8F] block">Responsable</span>
+                    {editingFields.has('assigned_to') ? (
+                      <select
+                        value={draft.assigned_to}
+                        onChange={(e) => setDraft(prev => ({ ...prev, assigned_to: e.target.value }))}
+                        className="mt-1 w-full bg-white border border-[#E0E0E1] rounded-xl px-3 py-2 text-sm text-[#3F4444] outline-none focus:ring-1 focus:ring-[#6353FF] transition-all"
+                      >
+                        {profileOptions.map(option => (
+                          <option key={option.value || 'unassigned'} value={option.value}>{option.label}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => enableEdit('assigned_to')}
+                        className="text-left text-[#3F4444] font-medium hover:text-[#6353FF] transition-colors"
+                      >
+                        {ticket.assigned_to_profile?.full_name || 'Sin asignar'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex items-start text-sm gap-3">
+                  <Tag className="w-4 h-4 text-[#8A8F8F] mt-0.5" />
+                  <div className="flex-1">
+                    <span className="text-[#8A8F8F] block">Tipo</span>
+                    {editingFields.has('ticket_type') ? (
+                      <select
+                        value={draft.ticket_type}
+                        onChange={(e) => setDraft(prev => ({ ...prev, ticket_type: e.target.value }))}
+                        className="mt-1 w-full bg-white border border-[#E0E0E1] rounded-xl px-3 py-2 text-sm text-[#3F4444] outline-none focus:ring-1 focus:ring-[#6353FF] transition-all"
+                      >
+                        <option value="">Sin tipo</option>
+                        {TICKET_TYPES.map(type => (
+                          <option key={type} value={type}>{type}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => enableEdit('ticket_type')}
+                        className="text-left text-[#3F4444] font-medium hover:text-[#6353FF] transition-colors"
+                      >
+                        {ticket.ticket_type || 'No definido'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-start text-sm gap-3">
+                  <Clock className="w-4 h-4 text-[#8A8F8F] mt-0.5" />
+                  <div className="flex-1">
+                    <span className="text-[#8A8F8F] block">Creado</span>
+                    <span className="text-[#3F4444] font-medium">
+                      {format(new Date(ticket.created_at), "d 'de' MMMM", { locale: es })}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-start text-sm gap-3">
+                  <History className="w-4 h-4 text-[#8A8F8F] mt-0.5" />
+                  <div className="flex-1">
+                    <span className="text-[#8A8F8F] block">Ult. Modificación</span>
+                    <span className="text-[#3F4444] font-medium">
+                      {format(new Date(ticket.updated_at), "d 'de' MMMM", { locale: es })}
+                    </span>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div className="flex items-center text-sm gap-3">
-              <User className="w-4 h-4 text-[#8A8F8F]" />
-              <span className="text-[#8A8F8F] w-24">Responsable</span>
-              <span className="text-[#3F4444] font-medium">{ticket.assigned_to_profile?.full_name || 'Sin asignar'}</span>
-            </div>
-            <div className="flex items-center text-sm gap-3">
-              <Tag className="w-4 h-4 text-[#8A8F8F]" />
-              <span className="text-[#8A8F8F] w-24">Tipo</span>
-              <span className="text-[#3F4444] font-medium">{ticket.ticket_type || 'No definido'}</span>
-            </div>
-            <div className="flex items-center text-sm gap-3">
-              <Clock className="w-4 h-4 text-[#8A8F8F]" />
-              <span className="text-[#8A8F8F] w-24">Creado</span>
-              <span className="text-[#3F4444] font-medium">
-                {format(new Date(ticket.created_at), "d 'de' MMMM", { locale: es })}
-              </span>
-            </div>
+
+            {(hasChanges || saveMessage) && (
+              <div className="pt-4 border-t border-[#ECECED] flex items-center justify-between gap-3">
+                <div className="text-sm text-[#2E7D32]">{saveMessage}</div>
+                {hasChanges && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleCancelChanges}
+                      className="px-4 py-2 text-sm font-medium text-[#8A8F8F] hover:text-[#3F4444] hover:bg-[#F7F7F8] rounded-xl transition-colors"
+                      disabled={updateTicket.isPending}
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleApplyChanges}
+                      className="px-4 py-2 text-sm font-semibold bg-[#6353FF] hover:bg-[#5244e6] text-white rounded-xl transition-colors disabled:opacity-50"
+                      disabled={updateTicket.isPending}
+                    >
+                      {updateTicket.isPending ? 'Guardando...' : 'Aceptar'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Description */}
           <div className="space-y-2">
             <h3 className="text-xs font-bold text-[#8A8F8F] uppercase tracking-widest">Descripción</h3>
-            <div className="text-[#5A5F5F] text-sm leading-relaxed bg-[#F7F7F8] p-4 rounded-xl border border-[#E0E0E1] whitespace-pre-wrap">
+            <div className="text-[#5A5F5F] text-sm leading-relaxed whitespace-pre-wrap">
               {ticket.description || 'Sin descripción.'}
             </div>
+          </div>
+
+          {/* Timings */}
+          <div className="space-y-2">
+            <h3 className="text-xs font-bold text-[#8A8F8F] uppercase tracking-widest">Timings</h3>
+            <div className="text-sm text-[#8A8F8F]">Por desarrollar</div>
           </div>
 
           {/* Solution (if any) */}
