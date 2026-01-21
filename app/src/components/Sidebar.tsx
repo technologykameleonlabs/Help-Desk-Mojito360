@@ -40,10 +40,10 @@ export function Sidebar() {
       <div className="p-4">
         <button
           onClick={() => navigate('/new')}
-          className="w-full flex items-center justify-center gap-2 py-2.5 px-6 bg-[#6353FF] hover:bg-[#5244e6] text-white font-semibold rounded-full transition-colors lowercase"
+          className="w-full flex items-center justify-center gap-2 py-2.5 px-6 bg-[#6353FF] hover:bg-[#5244e6] text-white font-semibold rounded-full transition-colors"
         >
           <Plus className="w-4 h-4" />
-          nuevo ticket
+          Nuevo ticket
         </button>
       </div>
 

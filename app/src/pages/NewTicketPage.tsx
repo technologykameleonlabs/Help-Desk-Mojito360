@@ -225,10 +225,10 @@ export function NewTicketPage() {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="flex items-center gap-2 px-8 py-2.5 bg-[#6353FF] hover:bg-[#5244e6] text-white font-semibold rounded-full transition-all disabled:opacity-50 lowercase"
+                className="flex items-center gap-2 px-8 py-2.5 bg-[#6353FF] hover:bg-[#5244e6] text-white font-semibold rounded-full transition-all disabled:opacity-50"
               >
                 {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
-                crear ticket
+                Crear ticket
               </button>
             </div>
           </form>
