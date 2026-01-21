@@ -28,8 +28,9 @@ export function useDeleteAttachment() {
     mutationFn: async ({ id, storagePath }: { id: string; storagePath: string }) => {
       // Delete from storage first
       const { error: storageError } = await supabase.storage
-        .from('ticket-attachments')
+        .from('files')
         .remove([storagePath])
+
 
       if (storageError) console.warn('Storage delete error:', storageError)
 

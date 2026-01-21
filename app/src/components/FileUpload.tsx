@@ -67,8 +67,9 @@ export function FileUpload({ ticketId, commentId, onUploadComplete, compact = fa
 
       // Upload to Supabase Storage
       const { error: uploadError } = await supabase.storage
-        .from('ticket-attachments')
+        .from('files')
         .upload(storagePath, file)
+
 
       if (uploadError) throw uploadError
 
@@ -152,8 +153,9 @@ export function AttachmentList({ attachments, onDelete, canDelete = false }: Att
     setDownloading(attachment.id)
     try {
       const { data, error } = await supabase.storage
-        .from('ticket-attachments')
+        .from('files')
         .download(attachment.storage_path)
+
 
       if (error) throw error
 
