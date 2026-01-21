@@ -4,24 +4,43 @@ import { Sidebar } from '../components/Sidebar'
 import { KanbanBoard } from '../components/KanbanBoard'
 import { TicketDetail } from '../components/TicketDetail'
 import { TicketList } from '../components/TicketList'
+import { MultiSelect } from '../components/MultiSelect'
 import { LayoutGrid, List, Search, X, Filter, ChevronDown, Loader2 } from 'lucide-react'
 import { useRealtimeTickets } from '../hooks/useRealtime'
 import { useFilteredTickets } from '../hooks/useFilteredTickets'
 import { useEntities, useProfiles } from '../hooks/useData'
-import { STAGES } from '../lib/supabase'
+import { STAGES, PRIORITIES } from '../lib/supabase'
 
+// Updated filters to support multi-select (arrays)
 export type TicketFilters = {
   search: string
-  priority: string
-  stage: string
-  entity: string
-  application: string
-  classification: string
-  assignedTo: string
+  priority: string[]  // Changed to array
+  stage: string[]     // Changed to array
+  entity: string[]    // Changed to array
+  application: string[]
+  classification: string[]
+  assignedTo: string[]
 }
 
 const APPLICATIONS = ['Mojito360', 'Wintruck', 'Odoo', 'Otros']
 const CLASSIFICATIONS = ['Soporte', 'Desarrollo']
+
+// Convert STAGES to options format
+const STAGE_OPTIONS = Object.entries(STAGES).map(([key, value]) => ({
+  value: key,
+  label: value.label,
+  color: value.color
+}))
+
+// Convert PRIORITIES to options format
+const PRIORITY_OPTIONS = Object.entries(PRIORITIES).map(([key, value]) => ({
+  value: key,
+  label: value.label,
+  color: value.color
+}))
+
+const APPLICATION_OPTIONS = APPLICATIONS.map(app => ({ value: app, label: app }))
+const CLASSIFICATION_OPTIONS = CLASSIFICATIONS.map(c => ({ value: c, label: c }))
 
 export function DashboardPage() {
   const navigate = useNavigate()
@@ -31,12 +50,12 @@ export function DashboardPage() {
   
   const [filters, setFilters] = useState<TicketFilters>({
     search: '',
-    priority: '',
-    stage: '',
-    entity: '',
-    application: '',
-    classification: '',
-    assignedTo: ''
+    priority: [],
+    stage: [],
+    entity: [],
+    application: [],
+    classification: [],
+    assignedTo: []
   })
   
   const { data: entities } = useEntities()
@@ -49,23 +68,38 @@ export function DashboardPage() {
     navigate(`/ticket/${ticketId}`)
   }
 
-  const updateFilter = (key: keyof TicketFilters, value: string) => {
+  const updateFilter = <K extends keyof TicketFilters>(key: K, value: TicketFilters[K]) => {
     setFilters(prev => ({ ...prev, [key]: value }))
   }
 
   const clearFilters = () => {
     setFilters({
       search: '',
-      priority: '',
-      stage: '',
-      entity: '',
-      application: '',
-      classification: '',
-      assignedTo: ''
+      priority: [],
+      stage: [],
+      entity: [],
+      application: [],
+      classification: [],
+      assignedTo: []
     })
   }
 
-  const activeFilterCount = Object.values(filters).filter(v => v).length
+  // Count active filters (arrays with length > 0)
+  const activeFilterCount = 
+    (filters.search ? 1 : 0) +
+    filters.priority.length +
+    filters.stage.length +
+    filters.entity.length +
+    filters.application.length +
+    filters.classification.length +
+    filters.assignedTo.length
+
+  // Convert entities and profiles to options
+  const entityOptions = entities?.map(e => ({ value: e.id, label: e.name })) || []
+  const profileOptions = [
+    { value: 'unassigned', label: 'Sin asignar' },
+    ...(profiles?.map(p => ({ value: p.id, label: p.full_name || p.email || 'Usuario' })) || [])
+  ]
 
   // List View Content Component (uses useFilteredTickets)
   function ListViewContent({ 
@@ -85,7 +119,7 @@ export function DashboardPage() {
       )
     }
 
-    const hasFilters = Object.values(filters).some(v => v)
+    const hasFilters = activeFilterCount > 0
 
     return (
       <div>
@@ -100,7 +134,6 @@ export function DashboardPage() {
   }
   
   return (
-
     <div className="flex h-screen bg-white overflow-hidden">
       <Sidebar />
       
@@ -182,101 +215,63 @@ export function DashboardPage() {
               </div>
             </div>
 
-            {/* Collapsible Filter Panel */}
+            {/* Collapsible Filter Panel with Multi-Select */}
             {showFilters && (
               <div className="px-6 py-4 bg-[#FAFAFA] border-t border-[#E0E0E1] animate-in slide-in-from-top-2 duration-200">
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-                  {/* Priority */}
-                  <div>
-                    <label className="block text-[10px] uppercase font-bold text-[#8A8F8F] tracking-wider mb-1.5">Prioridad</label>
-                    <select
-                      value={filters.priority}
-                      onChange={(e) => updateFilter('priority', e.target.value)}
-                      className="w-full px-3 py-2 bg-white border border-[#E0E0E1] rounded-lg text-sm text-[#3F4444] outline-none focus:ring-2 focus:ring-[#6353FF] focus:ring-opacity-30 transition-all"
-                    >
-                      <option value="">Todas</option>
-                      <option value="critical">Crítica</option>
-                      <option value="high">Alta</option>
-                      <option value="medium">Media</option>
-                      <option value="low">Baja</option>
-                    </select>
-                  </div>
+                  {/* Priority - Multi-select */}
+                  <MultiSelect
+                    label="Prioridad"
+                    options={PRIORITY_OPTIONS}
+                    value={filters.priority}
+                    onChange={(v) => updateFilter('priority', v)}
+                    placeholder="Todas"
+                  />
 
-                  {/* Stage */}
-                  <div>
-                    <label className="block text-[10px] uppercase font-bold text-[#8A8F8F] tracking-wider mb-1.5">Estado</label>
-                    <select
-                      value={filters.stage}
-                      onChange={(e) => updateFilter('stage', e.target.value)}
-                      className="w-full px-3 py-2 bg-white border border-[#E0E0E1] rounded-lg text-sm text-[#3F4444] outline-none focus:ring-2 focus:ring-[#6353FF] focus:ring-opacity-30 transition-all"
-                    >
-                      <option value="">Todos</option>
-                      {Object.entries(STAGES).map(([key, value]) => (
-                        <option key={key} value={key}>{value.label}</option>
-                      ))}
-                    </select>
-                  </div>
+                  {/* Stage - Multi-select */}
+                  <MultiSelect
+                    label="Estado"
+                    options={STAGE_OPTIONS}
+                    value={filters.stage}
+                    onChange={(v) => updateFilter('stage', v)}
+                    placeholder="Todos"
+                  />
 
-                  {/* Entity */}
-                  <div>
-                    <label className="block text-[10px] uppercase font-bold text-[#8A8F8F] tracking-wider mb-1.5">Entidad</label>
-                    <select
-                      value={filters.entity}
-                      onChange={(e) => updateFilter('entity', e.target.value)}
-                      className="w-full px-3 py-2 bg-white border border-[#E0E0E1] rounded-lg text-sm text-[#3F4444] outline-none focus:ring-2 focus:ring-[#6353FF] focus:ring-opacity-30 transition-all"
-                    >
-                      <option value="">Todas</option>
-                      {entities?.map(entity => (
-                        <option key={entity.id} value={entity.id}>{entity.name}</option>
-                      ))}
-                    </select>
-                  </div>
+                  {/* Entity - Multi-select */}
+                  <MultiSelect
+                    label="Entidad"
+                    options={entityOptions}
+                    value={filters.entity}
+                    onChange={(v) => updateFilter('entity', v)}
+                    placeholder="Todas"
+                  />
 
-                  {/* Application */}
-                  <div>
-                    <label className="block text-[10px] uppercase font-bold text-[#8A8F8F] tracking-wider mb-1.5">Aplicación</label>
-                    <select
-                      value={filters.application}
-                      onChange={(e) => updateFilter('application', e.target.value)}
-                      className="w-full px-3 py-2 bg-white border border-[#E0E0E1] rounded-lg text-sm text-[#3F4444] outline-none focus:ring-2 focus:ring-[#6353FF] focus:ring-opacity-30 transition-all"
-                    >
-                      <option value="">Todas</option>
-                      {APPLICATIONS.map(app => (
-                        <option key={app} value={app}>{app}</option>
-                      ))}
-                    </select>
-                  </div>
+                  {/* Application - Multi-select */}
+                  <MultiSelect
+                    label="Aplicación"
+                    options={APPLICATION_OPTIONS}
+                    value={filters.application}
+                    onChange={(v) => updateFilter('application', v)}
+                    placeholder="Todas"
+                  />
 
-                  {/* Classification */}
-                  <div>
-                    <label className="block text-[10px] uppercase font-bold text-[#8A8F8F] tracking-wider mb-1.5">Clasificación</label>
-                    <select
-                      value={filters.classification}
-                      onChange={(e) => updateFilter('classification', e.target.value)}
-                      className="w-full px-3 py-2 bg-white border border-[#E0E0E1] rounded-lg text-sm text-[#3F4444] outline-none focus:ring-2 focus:ring-[#6353FF] focus:ring-opacity-30 transition-all"
-                    >
-                      <option value="">Todas</option>
-                      {CLASSIFICATIONS.map(c => (
-                        <option key={c} value={c}>{c}</option>
-                      ))}
-                    </select>
-                  </div>
+                  {/* Classification - Multi-select */}
+                  <MultiSelect
+                    label="Clasificación"
+                    options={CLASSIFICATION_OPTIONS}
+                    value={filters.classification}
+                    onChange={(v) => updateFilter('classification', v)}
+                    placeholder="Todas"
+                  />
 
-                  {/* Assigned To */}
-                  <div>
-                    <label className="block text-[10px] uppercase font-bold text-[#8A8F8F] tracking-wider mb-1.5">Asignado a</label>
-                    <select
-                      value={filters.assignedTo}
-                      onChange={(e) => updateFilter('assignedTo', e.target.value)}
-                      className="w-full px-3 py-2 bg-white border border-[#E0E0E1] rounded-lg text-sm text-[#3F4444] outline-none focus:ring-2 focus:ring-[#6353FF] focus:ring-opacity-30 transition-all"
-                    >
-                      <option value="">Todos</option>
-                      <option value="unassigned">Sin asignar</option>
-                      {profiles?.map(profile => (
-                        <option key={profile.id} value={profile.id}>{profile.full_name || profile.email}</option>
-                      ))}
-                    </select>
-                  </div>
+                  {/* Assigned To - Multi-select */}
+                  <MultiSelect
+                    label="Asignado a"
+                    options={profileOptions}
+                    value={filters.assignedTo}
+                    onChange={(v) => updateFilter('assignedTo', v)}
+                    placeholder="Todos"
+                  />
                 </div>
               </div>
             )}
@@ -296,7 +291,6 @@ export function DashboardPage() {
               />
             )}
           </div>
-
 
         </main>
 

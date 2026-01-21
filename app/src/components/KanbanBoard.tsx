@@ -92,7 +92,7 @@ type KanbanBoardProps = {
 export function KanbanBoard({ onTicketClick, filters }: KanbanBoardProps) {
   const { data: tickets, isLoading } = useTickets()
   
-  // Apply all filters
+  // Apply all filters (supports multi-select arrays)
   const filteredTickets = useMemo(() => {
     if (!tickets) return []
     
@@ -106,37 +106,42 @@ export function KanbanBoard({ onTicketClick, filters }: KanbanBoardProps) {
         if (!matchesTitle && !matchesRef && !matchesEntity) return false
       }
       
-      // Priority filter
-      if (filters.priority && ticket.priority !== filters.priority) {
+      // Priority filter (multi-select)
+      if (filters.priority.length > 0 && !filters.priority.includes(ticket.priority)) {
         return false
       }
       
-      // Stage filter
-      if (filters.stage && ticket.stage !== filters.stage) {
+      // Stage filter (multi-select)
+      if (filters.stage.length > 0 && !filters.stage.includes(ticket.stage)) {
         return false
       }
       
-      // Entity filter
-      if (filters.entity && ticket.entity_id !== filters.entity) {
+      // Entity filter (multi-select)
+      if (filters.entity.length > 0 && ticket.entity_id && !filters.entity.includes(ticket.entity_id)) {
         return false
       }
       
-      // Application filter
-      if (filters.application && ticket.application !== filters.application) {
+      // Application filter (multi-select)
+      if (filters.application.length > 0 && ticket.application && !filters.application.includes(ticket.application)) {
         return false
       }
       
-      // Classification filter
-      if (filters.classification && ticket.classification !== filters.classification) {
+      // Classification filter (multi-select)
+      if (filters.classification.length > 0 && ticket.classification && !filters.classification.includes(ticket.classification)) {
         return false
       }
       
-      // Assigned to filter
-      if (filters.assignedTo) {
-        if (filters.assignedTo === 'unassigned') {
-          if (ticket.assigned_to) return false
+      // Assigned to filter (multi-select)
+      if (filters.assignedTo.length > 0) {
+        const hasUnassigned = filters.assignedTo.includes('unassigned')
+        const selectedUsers = filters.assignedTo.filter(id => id !== 'unassigned')
+        
+        if (!ticket.assigned_to && hasUnassigned) {
+          // Match unassigned
+        } else if (ticket.assigned_to && selectedUsers.includes(ticket.assigned_to)) {
+          // Match specific user
         } else {
-          if (ticket.assigned_to !== filters.assignedTo) return false
+          return false
         }
       }
       
@@ -145,7 +150,7 @@ export function KanbanBoard({ onTicketClick, filters }: KanbanBoardProps) {
   }, [tickets, filters])
   
   const ticketsByStage = useMemo(() => {
-    const grouped: Record<TicketStage, Ticket[]> = {} as any
+    const grouped: Record<TicketStage, Ticket[]> = {} as Record<TicketStage, Ticket[]>
     KANBAN_STAGES.forEach(stage => {
       grouped[stage] = []
     })
@@ -170,10 +175,19 @@ export function KanbanBoard({ onTicketClick, filters }: KanbanBoardProps) {
   const totalFiltered = filteredTickets.length
   const totalAll = tickets?.length || 0
   
+  // Check if any filters are active (array-based)
+  const hasActiveFilters = filters.search || 
+    filters.priority.length > 0 || 
+    filters.stage.length > 0 || 
+    filters.entity.length > 0 || 
+    filters.application.length > 0 || 
+    filters.classification.length > 0 || 
+    filters.assignedTo.length > 0
+  
   return (
     <div>
       {/* Results count */}
-      {(filters.search || filters.priority || filters.stage || filters.entity || filters.application || filters.classification || filters.assignedTo) && (
+      {hasActiveFilters && (
         <div className="mb-4 text-sm text-[#8A8F8F]">
           Mostrando <span className="font-semibold text-[#3F4444]">{totalFiltered}</span> de {totalAll} tickets
         </div>
