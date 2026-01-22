@@ -378,6 +378,14 @@ export function TicketDetail() {
                     <span className="text-[#3F4444] font-medium">{entityResponsible}</span>
                   </div>
                 </div>
+
+                <div className="flex items-start text-sm gap-3">
+                  <Tag className="w-4 h-4 text-[#8A8F8F] mt-0.5" />
+                  <div className="flex-1">
+                    <span className="text-[#8A8F8F] block">Aplicación</span>
+                    <span className="text-[#3F4444] font-medium">{ticket.application || '---'}</span>
+                  </div>
+                </div>
               </div>
 
               <div className="space-y-4">
