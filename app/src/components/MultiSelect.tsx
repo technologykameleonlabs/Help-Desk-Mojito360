@@ -26,6 +26,7 @@ export function MultiSelect({
   className = ""
 }: MultiSelectProps) {
   const [isOpen, setIsOpen] = useState(false)
+  const [searchTerm, setSearchTerm] = useState('')
   const containerRef = useRef<HTMLDivElement>(null)
 
   // Close on outside click
@@ -53,6 +54,15 @@ export function MultiSelect({
   }
 
   const selectedOptions = options.filter(opt => value.includes(opt.value))
+  const filteredOptions = options.filter(opt =>
+    opt.label.toLowerCase().includes(searchTerm.trim().toLowerCase())
+  )
+
+  useEffect(() => {
+    if (!isOpen) {
+      setSearchTerm('')
+    }
+  }, [isOpen])
 
   return (
     <div ref={containerRef} className={clsx("relative", className)}>
@@ -115,8 +125,29 @@ export function MultiSelect({
       {/* Dropdown */}
       {isOpen && (
         <div className="absolute z-50 mt-1 w-full bg-white border border-[#E0E0E1] rounded-lg shadow-lg overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150">
-          <div className="max-h-60 overflow-auto py-1">
-            {options.map(option => {
+          <div className="p-2 border-b border-[#E0E0E1]">
+            <div className="relative">
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Filtrar opciones..."
+                className="w-full pr-8 px-2.5 py-2 text-sm bg-white border border-[#E0E0E1] rounded-lg text-[#3F4444] outline-none focus:ring-1 focus:ring-[#6353FF] focus:border-[#6353FF] transition-all"
+              />
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-[#8A8F8F] hover:text-[#3F4444]"
+                  title="Limpiar filtro"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
+          <div className="max-h-56 overflow-auto py-1">
+            {filteredOptions.map(option => {
               const isSelected = value.includes(option.value)
               return (
                 <button
@@ -147,13 +178,18 @@ export function MultiSelect({
                 </button>
               )
             })}
+            {filteredOptions.length === 0 && (
+              <div className="px-3 py-2 text-sm text-[#8A8F8F]">
+                Sin resultados
+              </div>
+            )}
           </div>
           
           {/* Quick Actions */}
           <div className="border-t border-[#E0E0E1] px-3 py-2 flex items-center justify-between bg-[#FAFAFA]">
             <button
               type="button"
-              onClick={() => onChange(options.map(o => o.value))}
+              onClick={() => onChange(filteredOptions.map(o => o.value))}
               className="text-xs text-[#6353FF] hover:underline"
             >
               Seleccionar todos

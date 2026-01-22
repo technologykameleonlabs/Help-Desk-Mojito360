@@ -16,6 +16,7 @@ import {
   Clock, 
   User, 
   Building2, 
+  Users,
   Tag, 
   MessageSquare, 
   Send,
@@ -116,9 +117,20 @@ export function TicketDetail() {
     )
   }, [draft, ticket])
 
+  const selectedEntity = useMemo(() => {
+    if (draft.entity_id) {
+      return entities?.find(entity => entity.id === draft.entity_id) || null
+    }
+    return ticket?.entity || null
+  }, [draft.entity_id, entities, ticket?.entity])
+
+  const entityResponsible = selectedEntity?.assigned_to_profile?.full_name ||
+    selectedEntity?.assigned_to_profile?.email ||
+    ''
+
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-full w-[500px] bg-white border-l border-[#E0E0E1]">
+      <div className="flex items-center justify-center h-full w-[600px] bg-white border-l border-[#E0E0E1]">
         <Loader2 className="w-8 h-8 animate-spin text-[#6353FF]" />
       </div>
     )
@@ -126,7 +138,7 @@ export function TicketDetail() {
 
   if (error || !ticket) {
     return (
-      <div className="flex flex-col items-center justify-center h-full w-[500px] bg-white border-l border-[#E0E0E1] text-[#8A8F8F] gap-4">
+      <div className="flex flex-col items-center justify-center h-full w-[600px] bg-white border-l border-[#E0E0E1] text-[#8A8F8F] gap-4">
         <AlertCircle className="w-12 h-12 text-[#E0E0E1]" />
         <p>No se encontró el ticket o hubo un error.</p>
         <button onClick={() => navigate('/')} className="text-[#6353FF] hover:underline">
@@ -227,7 +239,7 @@ export function TicketDetail() {
   const isSaving = updateTicket.isPending || awaitingRefresh || isFetching
 
   return (
-    <div className="flex flex-col h-full bg-white border-l border-[#E0E0E1] w-[900px] animate-in slide-in-from-right duration-300 shadow-xl relative z-20">
+    <div className="flex flex-col h-full bg-white border-l border-[#E0E0E1] w-[600px] animate-in slide-in-from-right duration-300 shadow-xl relative z-20">
       {/* Header */}
       <header className="flex items-center justify-between px-6 py-4 border-b border-[#E0E0E1]">
         <div className="flex items-center gap-3">
@@ -235,15 +247,17 @@ export function TicketDetail() {
           <h2 className="text-[#3F4444] font-semibold flex-1 line-clamp-1">{ticket.title}</h2>
         </div>
         <div className="flex items-center gap-2">
-          <a
-            href={`https://app.mojito360.com/resources/support/detail-case/${ticket.ticket_ref}`}
-            target="_blank"
-            rel="noreferrer"
-            className="p-1.5 hover:bg-[#F7F7F8] rounded-lg text-[#8A8F8F] transition-colors"
-            title="Abrir en Mojito360"
-          >
-            <ExternalLink className="w-5 h-5" />
-          </a>
+          {ticket.mojito_ref ? (
+            <a
+              href={`https://app.mojito360.com/resources/support/detail-case/${ticket.mojito_ref}`}
+              target="_blank"
+              rel="noreferrer"
+              className="p-1.5 hover:bg-[#F7F7F8] rounded-lg text-[#8A8F8F] transition-colors"
+              title="Abrir en Mojito360"
+            >
+              <ExternalLink className="w-5 h-5" />
+            </a>
+          ) : null}
           <button 
             onClick={() => navigate('/')}
             className="p-1.5 hover:bg-[#F7F7F8] rounded-lg text-[#8A8F8F] transition-colors"
@@ -349,28 +363,10 @@ export function TicketDetail() {
                 </div>
 
                 <div className="flex items-start text-sm gap-3">
-                  <User className="w-4 h-4 text-[#8A8F8F] mt-0.5" />
+                  <Users className="w-4 h-4 text-[#8A8F8F] mt-0.5" />
                   <div className="flex-1">
                     <span className="text-[#8A8F8F] block">Responsable</span>
-                    {editingFields.has('assigned_to') ? (
-                      <select
-                        value={draft.assigned_to}
-                        onChange={(e) => setDraft(prev => ({ ...prev, assigned_to: e.target.value }))}
-                        className="mt-1 w-full bg-white border border-[#E0E0E1] rounded-xl px-3 py-2 text-sm text-[#3F4444] outline-none focus:ring-1 focus:ring-[#6353FF] transition-all appearance-none"
-                      >
-                        {profileOptions.map(option => (
-                          <option key={option.value || 'unassigned'} value={option.value}>{option.label}</option>
-                        ))}
-                      </select>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => enableEdit('assigned_to')}
-                        className="text-left text-[#3F4444] font-medium hover:text-[#6353FF] transition-colors"
-                      >
-                        {ticket.assigned_to_profile?.full_name || 'Sin asignar'}
-                      </button>
-                    )}
+                    <span className="text-[#3F4444] font-medium">{entityResponsible}</span>
                   </div>
                 </div>
               </div>
@@ -398,6 +394,40 @@ export function TicketDetail() {
                         className="text-left text-[#3F4444] font-medium hover:text-[#6353FF] transition-colors"
                       >
                         {ticket.ticket_type || 'No definido'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-start text-sm gap-3">
+                  <ExternalLink className="w-4 h-4 text-[#8A8F8F] mt-0.5" />
+                  <div className="flex-1">
+                    <span className="text-[#8A8F8F] block">Referencia Mojito</span>
+                    <span className="text-[#3F4444] font-medium">{ticket.mojito_ref ?? ''}</span>
+                  </div>
+                </div>
+
+                <div className="flex items-start text-sm gap-3">
+                  <User className="w-4 h-4 text-[#8A8F8F] mt-0.5" />
+                  <div className="flex-1">
+                    <span className="text-[#8A8F8F] block">Asignado a</span>
+                    {editingFields.has('assigned_to') ? (
+                      <select
+                        value={draft.assigned_to}
+                        onChange={(e) => setDraft(prev => ({ ...prev, assigned_to: e.target.value }))}
+                        className="mt-1 w-full bg-white border border-[#E0E0E1] rounded-xl px-3 py-2 text-sm text-[#3F4444] outline-none focus:ring-1 focus:ring-[#6353FF] transition-all appearance-none"
+                      >
+                        {profileOptions.map(option => (
+                          <option key={option.value || 'unassigned'} value={option.value}>{option.label}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => enableEdit('assigned_to')}
+                        className="text-left text-[#3F4444] font-medium hover:text-[#6353FF] transition-colors"
+                      >
+                        {ticket.assigned_to_profile?.full_name || 'Sin asignar'}
                       </button>
                     )}
                   </div>

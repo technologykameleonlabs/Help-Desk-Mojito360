@@ -9,6 +9,7 @@ import { InboxPage } from './pages/InboxPage'
 import { MyTicketsPage } from './pages/MyTicketsPage'
 import { ArchivePage } from './pages/ArchivePage'
 import { UsersPage } from './pages/UsersPage'
+import { EntitiesPage } from './pages/EntitiesPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -80,6 +81,9 @@ function App() {
 
                   {/* Users */}
                   <Route path="/users" element={<UsersPage />} />
+
+                  {/* Entities */}
+                  <Route path="/entities" element={<EntitiesPage />} />
                 </Routes>
               </ProtectedRoute>
             }

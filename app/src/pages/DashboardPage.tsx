@@ -14,12 +14,14 @@ import { STAGES, PRIORITIES } from '../lib/supabase'
 // Updated filters to support multi-select (arrays)
 export type TicketFilters = {
   reference: string
+  mojitoReference: string
   search: string
   priority: string[]  // Changed to array
   stage: string[]     // Changed to array
   entity: string[]    // Changed to array
   application: string[]
   assignedTo: string[]
+  responsible: string[]
 }
 
 const APPLICATIONS = ['Mojito360', 'Wintruck', 'Odoo', 'Otros']
@@ -48,12 +50,14 @@ export function DashboardPage() {
   
   const [filters, setFilters] = useState<TicketFilters>({
     reference: '',
+    mojitoReference: '',
     search: '',
     priority: [],
     stage: [],
     entity: [],
     application: [],
-    assignedTo: []
+    assignedTo: [],
+    responsible: []
   })
   
   const { data: entities } = useEntities()
@@ -73,29 +77,37 @@ export function DashboardPage() {
   const clearFilters = () => {
     setFilters({
       reference: '',
+      mojitoReference: '',
       search: '',
       priority: [],
       stage: [],
       entity: [],
       application: [],
-      assignedTo: []
+      assignedTo: [],
+      responsible: []
     })
   }
 
   // Count active filters (arrays with length > 0)
   const activeFilterCount = 
     (filters.reference ? 1 : 0) +
+    (filters.mojitoReference ? 1 : 0) +
     (filters.search ? 1 : 0) +
     filters.priority.length +
     filters.stage.length +
     filters.entity.length +
     filters.application.length +
-    filters.assignedTo.length
+    filters.assignedTo.length +
+    filters.responsible.length
 
   // Convert entities and profiles to options
   const entityOptions = entities?.map(e => ({ value: e.id, label: e.name })) || []
   const profileOptions = [
     { value: 'unassigned', label: 'Sin asignar' },
+    ...(profiles?.map(p => ({ value: p.id, label: p.full_name || p.email || 'Usuario' })) || [])
+  ]
+  const responsibleOptions = [
+    { value: 'unassigned', label: 'Sin responsable' },
     ...(profiles?.map(p => ({ value: p.id, label: p.full_name || p.email || 'Usuario' })) || [])
   ]
 
@@ -215,8 +227,8 @@ export function DashboardPage() {
 
             {/* Collapsible Filter Panel with Multi-Select */}
             {showFilters && (
-              <div className="px-6 py-4 bg-[#FAFAFA] border-t border-[#E0E0E1] animate-in slide-in-from-top-2 duration-200">
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+              <div className="px-6 py-4 bg-[#FAFAFA] border-t border-[#E0E0E1] animate-in slide-in-from-top-2 duration-200 space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                   {/* Reference - Number input */}
                   <div className="space-y-1">
                     <label className="block mb-1.5 text-[10px] uppercase font-bold text-[#8A8F8F] tracking-wider">
@@ -228,6 +240,21 @@ export function DashboardPage() {
                       placeholder="Ej: 123"
                       value={filters.reference}
                       onChange={(e) => updateFilter('reference', e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-[#E0E0E1] rounded-xl text-sm text-[#3F4444] placeholder:text-[#B0B5B5] outline-none focus:ring-2 focus:ring-[#6353FF] focus:ring-opacity-30 focus:border-[#6353FF] transition-all"
+                    />
+                  </div>
+
+                  {/* Mojito Reference - Number input */}
+                  <div className="space-y-1">
+                    <label className="block mb-1.5 text-[10px] uppercase font-bold text-[#8A8F8F] tracking-wider">
+                      Referencia Mojito
+                    </label>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      placeholder="Ej: 123"
+                      value={filters.mojitoReference}
+                      onChange={(e) => updateFilter('mojitoReference', e.target.value)}
                       className="w-full px-3 py-2 bg-white border border-[#E0E0E1] rounded-xl text-sm text-[#3F4444] placeholder:text-[#B0B5B5] outline-none focus:ring-2 focus:ring-[#6353FF] focus:ring-opacity-30 focus:border-[#6353FF] transition-all"
                     />
                   </div>
@@ -249,7 +276,9 @@ export function DashboardPage() {
                     onChange={(v) => updateFilter('stage', v)}
                     placeholder="Todos"
                   />
+                </div>
 
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                   {/* Entity - Multi-select */}
                   <MultiSelect
                     label="Entidad"
@@ -274,6 +303,15 @@ export function DashboardPage() {
                     options={profileOptions}
                     value={filters.assignedTo}
                     onChange={(v) => updateFilter('assignedTo', v)}
+                    placeholder="Todos"
+                  />
+
+                  {/* Responsible - Multi-select */}
+                  <MultiSelect
+                    label="Responsable"
+                    options={responsibleOptions}
+                    value={filters.responsible}
+                    onChange={(v) => updateFilter('responsible', v)}
                     placeholder="Todos"
                   />
                 </div>

@@ -14,13 +14,39 @@ export function LoginPage() {
     setLoading(true)
     setError(null)
 
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password
     })
 
     if (error) {
       setError(error.message)
+      setLoading(false)
+      return
+    }
+
+    const userId = data.user?.id
+    if (!userId) {
+      setError('No se pudo validar el usuario.')
+      setLoading(false)
+      return
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('is_active')
+      .eq('id', userId)
+      .single()
+
+    if (profileError) {
+      setError('No se pudo validar el estado del usuario.')
+      setLoading(false)
+      return
+    }
+
+    if (!profile?.is_active) {
+      await supabase.auth.signOut()
+      setError('Tu usuario está inactivo. Contacta al administrador.')
       setLoading(false)
       return
     }

@@ -205,12 +205,56 @@ export function useEntities() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('entities')
-        .select('*')
+        .select(`
+          *,
+          assigned_to_profile:profiles!entities_assigned_to_fkey(*)
+        `)
         .eq('status', 'active')
         .order('name')
       
       if (error) throw error
       return data as Entity[]
+    }
+  })
+}
+
+export function useUpdateEntity() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ id, ...updates }: Partial<Entity> & { id: string }) => {
+      const { data, error } = await supabase
+        .from('entities')
+        .update({ ...updates, updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .select()
+        .single()
+
+      if (error) throw error
+      return data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['entities'] })
+    }
+  })
+}
+
+export function useUpdateEntities() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ ids, updates }: { ids: string[]; updates: Partial<Entity> }) => {
+      const { data, error } = await supabase
+        .from('entities')
+        .update({ ...updates, updated_at: new Date().toISOString() })
+        .in('id', ids)
+        .select()
+
+      if (error) throw error
+      return data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['entities'] })
     }
   })
 }

@@ -56,6 +56,7 @@ create table if not exists public.entities (
   name text not null,
   status text check (status in ('active', 'inactive')) default 'active',
   usage text, -- 'Producción', 'Interna', 'Test'
+  assigned_to uuid references public.profiles(id),
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );

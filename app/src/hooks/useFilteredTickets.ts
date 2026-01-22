@@ -22,6 +22,15 @@ export function useFilteredTickets(filters: TicketFilters) {
         }
       }
 
+      // Mojito reference filter (mojito_ref)
+      if (filters.mojitoReference) {
+        const ref = filters.mojitoReference.trim()
+        const mojitoValue = ticket.mojito_ref?.toString() || ''
+        if (ref && !mojitoValue.includes(ref)) {
+          return false
+        }
+      }
+
       // Search filter (title, ref, entity name)
       if (filters.search) {
         const q = filters.search.toLowerCase()
@@ -68,6 +77,25 @@ export function useFilteredTickets(filters: TicketFilters) {
           // Match: only unassigned
         } else if (!hasUnassigned && selectedUsers.length > 0 && ticket.assigned_to && selectedUsers.includes(ticket.assigned_to)) {
           // Match: only specific users
+        } else {
+          return false
+        }
+      }
+
+      // Responsible filter (entity assigned_to)
+      if (filters.responsible.length > 0) {
+        const hasUnassigned = filters.responsible.includes('unassigned')
+        const selectedUsers = filters.responsible.filter(id => id !== 'unassigned')
+        const responsibleId = ticket.entity?.assigned_to || null
+
+        if (hasUnassigned && !responsibleId) {
+          // Match: unassigned responsible
+        } else if (selectedUsers.length > 0 && responsibleId && selectedUsers.includes(responsibleId)) {
+          // Match: specific responsible
+        } else if (hasUnassigned && selectedUsers.length === 0 && !responsibleId) {
+          // Match: only unassigned
+        } else if (!hasUnassigned && selectedUsers.length > 0 && responsibleId && selectedUsers.includes(responsibleId)) {
+          // Match: only specific responsibles
         } else {
           return false
         }

@@ -22,6 +22,7 @@ export type Profile = {
   avatar_url: string | null
   role: 'admin' | 'agent' | 'dev'
   email: string | null
+  is_active: boolean
   created_at: string
   updated_at: string
 }
@@ -32,8 +33,11 @@ export type Entity = {
   name: string
   status: 'active' | 'inactive'
   usage: string | null
+  assigned_to: string | null
   created_at: string
   updated_at: string
+  // Relations
+  assigned_to_profile?: Profile
 }
 
 export type TicketStage = 
@@ -54,6 +58,7 @@ export type TicketPriority = 'low' | 'medium' | 'high' | 'critical'
 export type Ticket = {
   id: string
   ticket_ref: number
+  mojito_ref: number | null
   title: string
   description: string | null
   stage: TicketStage

@@ -30,9 +30,14 @@ export function UsersPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [creating, setCreating] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [editState, setEditState] = useState<{ full_name: string; role: Profile['role'] }>({
+  const [editState, setEditState] = useState<{
+    full_name: string
+    role: Profile['role']
+    is_active: boolean
+  }>({
     full_name: '',
     role: 'agent',
+    is_active: true,
   })
   const [message, setMessage] = useState<string | null>(null)
 
@@ -105,6 +110,7 @@ export function UsersPage() {
           full_name: formState.full_name,
           role: formState.role,
           email: formState.email,
+          is_active: true,
         })
         .eq('id', data.user.id)
 
@@ -128,6 +134,7 @@ export function UsersPage() {
     setEditState({
       full_name: profile.full_name || '',
       role: profile.role,
+      is_active: profile.is_active ?? true,
     })
   }
 
@@ -153,6 +160,7 @@ export function UsersPage() {
         .update({
           full_name: editState.full_name,
           role: editState.role,
+          is_active: editState.is_active,
         })
         .eq('id', profile.id)
 
@@ -297,11 +305,28 @@ export function UsersPage() {
                             <option value="agent">Agent</option>
                             <option value="dev">Dev</option>
                           </select>
+                          <select
+                            value={editState.is_active ? 'active' : 'inactive'}
+                            onChange={(e) => setEditState(prev => ({ ...prev, is_active: e.target.value === 'active' }))}
+                            className="w-full px-3 py-2 bg-white border border-[#E0E0E1] rounded-xl text-sm text-[#3F4444] outline-none focus:ring-2 focus:ring-[#6353FF] focus:ring-opacity-30 focus:border-[#6353FF] transition-all appearance-none"
+                          >
+                            <option value="active">Activo</option>
+                            <option value="inactive">Inactivo</option>
+                          </select>
                         </>
                       ) : (
                         <div className="flex-1 text-sm text-[#5A5F5F]">
                           <span className="inline-flex items-center px-2 py-1 rounded-lg text-[11px] font-semibold bg-[#F7F7F8] border border-[#E0E0E1]">
                             {profile.role}
+                          </span>
+                          <span
+                            className={`ml-2 inline-flex items-center px-2 py-1 rounded-lg text-[11px] font-semibold border ${
+                              profile.is_active
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                : 'bg-red-50 text-red-600 border-red-200'
+                            }`}
+                          >
+                            {profile.is_active ? 'Activo' : 'Inactivo'}
                           </span>
                         </div>
                       )}

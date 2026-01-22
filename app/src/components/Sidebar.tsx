@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { 
   LayoutDashboard, 
@@ -5,6 +6,9 @@ import {
   User, 
   Archive, 
   Users,
+  Building2,
+  ChevronRight,
+  ChevronLeft,
   LogOut,
   Plus
 } from 'lucide-react'
@@ -20,9 +24,13 @@ const navItems = [
 
 export function Sidebar() {
   const navigate = useNavigate()
+  const [collapsed, setCollapsed] = useState(true)
   const { data: user } = useCurrentUser()
   const adminItems = user?.role === 'admin'
-    ? [{ to: '/users', icon: Users, label: 'Usuarios' }]
+    ? [
+        { to: '/users', icon: Users, label: 'Usuarios' },
+        { to: '/entities', icon: Building2, label: 'Entidades' },
+      ]
     : []
 
   const handleLogout = async () => {
@@ -31,23 +39,41 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="w-64 h-screen bg-[#F7F7F8] border-r border-[#E0E0E1] flex flex-col">
+    <aside className={`${collapsed ? 'w-20' : 'w-64'} h-screen bg-[#F7F7F8] border-r border-[#E0E0E1] flex flex-col transition-all duration-200 relative`}>
       {/* Logo */}
-      <div className="p-6 border-b border-[#E0E0E1]">
-        <h1 className="text-xl font-bold text-[#3F4444]">
-          Mojito<span className="text-[#6353FF]">360</span>
-        </h1>
-        <p className="text-xs text-[#8A8F8F] mt-1">Help Desk</p>
+      <div className="h-16 px-4 border-b border-[#E0E0E1] flex items-center justify-center">
+        <div className="flex items-center gap-2">
+          <span className="text-xl font-bold text-[#3F4444]">
+            {collapsed ? (
+              <>
+                M<span className="text-[#6353FF]">360</span>
+              </>
+            ) : (
+              <>
+                Mojito<span className="text-[#6353FF]">360</span>
+              </>
+            )}
+          </span>
+        </div>
       </div>
+      <button
+        type="button"
+        onClick={() => setCollapsed(prev => !prev)}
+        className="absolute -right-3 top-1/2 -translate-y-1/2 z-10 w-6 h-6 rounded-full bg-white border border-[#E0E0E1] text-[#8A8F8F] hover:text-[#3F4444] hover:bg-[#ECECED] transition-colors flex items-center justify-center shadow-sm"
+        title={collapsed ? 'Expandir' : 'Colapsar'}
+      >
+        {collapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronLeft className="w-3.5 h-3.5" />}
+      </button>
 
       {/* New Ticket Button */}
       <div className="p-4">
         <button
           onClick={() => navigate('/new')}
-          className="w-full flex items-center justify-center gap-2 py-2.5 px-6 bg-[#6353FF] hover:bg-[#5244e6] text-white font-semibold rounded-full transition-colors"
+          className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-[#6353FF] hover:bg-[#5244e6] text-white font-semibold rounded-full transition-colors"
+          title={collapsed ? 'Nuevo ticket' : undefined}
         >
           <Plus className="w-4 h-4" />
-          Nuevo ticket
+          {!collapsed && 'Nuevo ticket'}
         </button>
       </div>
 
@@ -57,8 +83,9 @@ export function Sidebar() {
           <NavLink
             key={to}
             to={to}
+            title={collapsed ? label : undefined}
             className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+              `flex items-center ${collapsed ? 'justify-center px-2' : 'gap-3 px-3'} py-2.5 rounded-lg text-sm font-medium transition-colors ${
                 isActive
                   ? 'bg-[rgba(99,83,255,0.1)] text-[#6353FF]'
                   : 'text-[#5A5F5F] hover:text-[#3F4444] hover:bg-[#ECECED]'
@@ -66,23 +93,25 @@ export function Sidebar() {
             }
           >
             <Icon className="w-5 h-5" />
-            {label}
+            {!collapsed && label}
           </NavLink>
         ))}
       </nav>
 
       {/* User Section */}
       <div className="p-4 border-t border-[#E0E0E1]">
-        <div className="flex items-center gap-3">
+        <div className={`flex items-center ${collapsed ? 'flex-col gap-2' : 'gap-3'}`}>
           <div className="w-9 h-9 rounded-full bg-[#6353FF] flex items-center justify-center text-white font-medium text-sm">
             {user?.full_name?.[0] || user?.email?.[0] || '?'}
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-[#3F4444] truncate">
-              {user?.full_name || 'Usuario'}
-            </p>
-            <p className="text-xs text-[#8A8F8F] truncate">{user?.email}</p>
-          </div>
+          {!collapsed && (
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-[#3F4444] truncate">
+                {user?.full_name || 'Usuario'}
+              </p>
+              <p className="text-xs text-[#8A8F8F] truncate">{user?.email}</p>
+            </div>
+          )}
           <button
             onClick={handleLogout}
             className="p-2 text-[#8A8F8F] hover:text-[#3F4444] hover:bg-[#ECECED] rounded-lg transition-colors"
