@@ -9,6 +9,7 @@ type ConfirmModalProps = {
   onConfirm: () => void
   onCancel: () => void
   isConfirming?: boolean
+  disableClose?: boolean
 }
 
 export function ConfirmModal({
@@ -20,6 +21,7 @@ export function ConfirmModal({
   onConfirm,
   onCancel,
   isConfirming = false,
+  disableClose = false,
 }: ConfirmModalProps) {
   if (!open) return null
 
@@ -27,9 +29,13 @@ export function ConfirmModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div
         className="absolute inset-0 bg-black/40"
-        onClick={onCancel}
+        onClick={() => {
+          if (!disableClose) {
+            onCancel()
+          }
+        }}
         role="button"
-        tabIndex={-1}
+        tabIndex={disableClose ? -1 : 0}
         aria-label="Cerrar modal"
       />
       <div className="relative bg-white rounded-2xl shadow-xl border border-[#E0E0E1] w-full max-w-md mx-4">
@@ -42,7 +48,7 @@ export function ConfirmModal({
             type="button"
             onClick={onCancel}
             className="px-4 py-2 text-sm font-medium text-[#8A8F8F] hover:text-[#3F4444] hover:bg-[#F7F7F8] rounded-xl transition-colors"
-            disabled={isConfirming}
+            disabled={isConfirming || disableClose}
           >
             {cancelText}
           </button>

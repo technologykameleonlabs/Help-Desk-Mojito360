@@ -1,4 +1,4 @@
-import { useMemo, useState, forwardRef, type CSSProperties } from 'react'
+import { useMemo, useState, useEffect, forwardRef, type CSSProperties } from 'react'
 import { useTickets, useUpdateTicket } from '../hooks/useData'
 import type { Ticket, TicketStage } from '../lib/supabase'
 import { STAGES, PRIORITIES } from '../lib/supabase'
@@ -75,18 +75,14 @@ const TicketCard = forwardRef<HTMLDivElement, TicketCardProps>(function TicketCa
       </h3>
       
       <div className="flex flex-wrap gap-2 text-xs text-[#8A8F8F]">
-        {ticket.entity && (
-          <span className="flex items-center gap-1">
-            <Building2 className="w-3 h-3" />
-            <span className="truncate max-w-[120px]">{ticket.entity.name}</span>
-          </span>
-        )}
-        {ticket.assigned_to_profile && (
-          <span className="flex items-center gap-1">
-            <User className="w-3 h-3" />
-            {ticket.assigned_to_profile.full_name?.split(' ')[0]}
-          </span>
-        )}
+        <span className="flex items-center gap-1">
+          <Building2 className="w-3 h-3" />
+          <span className="truncate max-w-[120px]">{ticket.entity?.name || '---'}</span>
+        </span>
+        <span className="flex items-center gap-1">
+          <User className="w-3 h-3" />
+          {ticket.assigned_to_profile?.full_name?.split(' ')[0] || '---'}
+        </span>
       </div>
     </div>
   )
@@ -163,7 +159,7 @@ type KanbanBoardProps = {
 }
 
 export function KanbanBoard({ onTicketClick, filters }: KanbanBoardProps) {
-  const { data: tickets, isLoading } = useTickets()
+  const { data: tickets, isLoading, isFetching } = useTickets()
   const updateTicket = useUpdateTicket()
   const [activeTicketId, setActiveTicketId] = useState<string | null>(null)
   const [pendingMove, setPendingMove] = useState<{
@@ -171,7 +167,7 @@ export function KanbanBoard({ onTicketClick, filters }: KanbanBoardProps) {
     fromStage: TicketStage
     toStage: TicketStage
   } | null>(null)
-  const [isConfirming, setIsConfirming] = useState(false)
+  const [awaitingRefresh, setAwaitingRefresh] = useState(false)
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
   
@@ -180,6 +176,14 @@ export function KanbanBoard({ onTicketClick, filters }: KanbanBoardProps) {
     if (!tickets) return []
     
     return tickets.filter(ticket => {
+      // Reference filter (ticket_ref)
+      if (filters.reference) {
+        const ref = filters.reference.trim()
+        if (ref && !ticket.ticket_ref.toString().includes(ref)) {
+          return false
+        }
+      }
+
       // Search filter (title, ref, entity name)
       if (filters.search) {
         const q = filters.search.toLowerCase()
@@ -200,18 +204,17 @@ export function KanbanBoard({ onTicketClick, filters }: KanbanBoardProps) {
       }
       
       // Entity filter (multi-select)
-      if (filters.entity.length > 0 && ticket.entity_id && !filters.entity.includes(ticket.entity_id)) {
-        return false
+      if (filters.entity.length > 0) {
+        if (!ticket.entity_id || !filters.entity.includes(ticket.entity_id)) {
+          return false
+        }
       }
       
       // Application filter (multi-select)
-      if (filters.application.length > 0 && ticket.application && !filters.application.includes(ticket.application)) {
-        return false
-      }
-      
-      // Classification filter (multi-select)
-      if (filters.classification.length > 0 && ticket.classification && !filters.classification.includes(ticket.classification)) {
-        return false
+      if (filters.application.length > 0) {
+        if (!ticket.application || !filters.application.includes(ticket.application)) {
+          return false
+        }
       }
       
       // Assigned to filter (multi-select)
@@ -280,6 +283,14 @@ export function KanbanBoard({ onTicketClick, filters }: KanbanBoardProps) {
   }
 
   const activeTicket = activeTicketId ? ticketsById.get(activeTicketId) : null
+  const isUpdating = updateTicket.isPending || awaitingRefresh || isFetching
+
+  useEffect(() => {
+    if (awaitingRefresh && !updateTicket.isPending && !isFetching) {
+      setAwaitingRefresh(false)
+      setPendingMove(null)
+    }
+  }, [awaitingRefresh, updateTicket.isPending, isFetching])
   
   if (isLoading) {
     return (
@@ -293,12 +304,12 @@ export function KanbanBoard({ onTicketClick, filters }: KanbanBoardProps) {
   const totalAll = tickets?.length || 0
   
   // Check if any filters are active (array-based)
-  const hasActiveFilters = filters.search || 
+  const hasActiveFilters = filters.reference ||
+    filters.search || 
     filters.priority.length > 0 || 
     filters.stage.length > 0 || 
     filters.entity.length > 0 || 
     filters.application.length > 0 || 
-    filters.classification.length > 0 || 
     filters.assignedTo.length > 0
   
   return (
@@ -349,19 +360,23 @@ export function KanbanBoard({ onTicketClick, filters }: KanbanBoardProps) {
         }
         confirmText="Aceptar"
         cancelText="Cancelar"
-        isConfirming={isConfirming}
-        onCancel={() => setPendingMove(null)}
+        isConfirming={isUpdating}
+        disableClose={isUpdating}
+        onCancel={() => {
+          if (!isUpdating) {
+            setPendingMove(null)
+          }
+        }}
         onConfirm={async () => {
           if (!pendingMove) return
-          setIsConfirming(true)
+          setAwaitingRefresh(true)
           try {
             await updateTicket.mutateAsync({ id: pendingMove.ticketId, stage: pendingMove.toStage })
-            setPendingMove(null)
           } catch (error) {
             console.error(error)
             alert('No se pudo actualizar el estado del ticket.')
+            setAwaitingRefresh(false)
           } finally {
-            setIsConfirming(false)
           }
         }}
       />

@@ -41,7 +41,7 @@ type EditableField = 'stage' | 'priority' | 'entity_id' | 'assigned_to' | 'ticke
 export function TicketDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { data: ticket, isLoading, error } = useTicket(id!)
+  const { data: ticket, isLoading, error, isFetching } = useTicket(id!)
   const { data: comments } = useComments(id!)
   const { data: profiles } = useProfiles()
   const { data: entities } = useEntities()
@@ -58,6 +58,8 @@ export function TicketDetail() {
   const [mentionedUserIds, setMentionedUserIds] = useState<string[]>([])
   const [editingFields, setEditingFields] = useState<Set<EditableField>>(new Set())
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
+  const [awaitingRefresh, setAwaitingRefresh] = useState(false)
+  const [pendingSaveMessage, setPendingSaveMessage] = useState<string | null>(null)
 
   const [draft, setDraft] = useState({
     stage: '' as TicketStage,
@@ -84,6 +86,17 @@ export function TicketDetail() {
     const timeout = setTimeout(() => setSaveMessage(null), 3000)
     return () => clearTimeout(timeout)
   }, [saveMessage])
+
+  useEffect(() => {
+    if (!awaitingRefresh) return
+    if (!updateTicket.isPending && !isFetching) {
+      setAwaitingRefresh(false)
+      if (pendingSaveMessage) {
+        setSaveMessage(pendingSaveMessage)
+        setPendingSaveMessage(null)
+      }
+    }
+  }, [awaitingRefresh, updateTicket.isPending, isFetching, pendingSaveMessage])
 
   // Track mentions as user types
   const handleMention = useCallback((userId: string) => {
@@ -159,6 +172,9 @@ export function TicketDetail() {
   const handleApplyChanges = async () => {
     if (!hasChanges) return
     try {
+      setSaveMessage(null)
+      setPendingSaveMessage('Cambios guardados correctamente.')
+      setAwaitingRefresh(true)
       const updates: Partial<Ticket> & { id: string } = { id: ticket.id }
       if (draft.stage !== ticket.stage) updates.stage = draft.stage
       if (draft.priority !== ticket.priority) updates.priority = draft.priority
@@ -167,11 +183,12 @@ export function TicketDetail() {
       if ((draft.ticket_type || '') !== (ticket.ticket_type || '')) updates.ticket_type = draft.ticket_type || null
 
       await updateTicket.mutateAsync(updates)
-      setSaveMessage('Cambios guardados correctamente.')
       setEditingFields(new Set())
     } catch (e) {
       console.error(e)
       alert('No se pudo actualizar el ticket.')
+      setAwaitingRefresh(false)
+      setPendingSaveMessage(null)
     }
   }
 
@@ -207,6 +224,8 @@ export function TicketDetail() {
     })) || [])
   ]
 
+  const isSaving = updateTicket.isPending || awaitingRefresh || isFetching
+
   return (
     <div className="flex flex-col h-full bg-white border-l border-[#E0E0E1] w-[900px] animate-in slide-in-from-right duration-300 shadow-xl relative z-20">
       {/* Header */}
@@ -239,7 +258,15 @@ export function TicketDetail() {
         {/* Quick Actions */}
         <div className="p-6 space-y-6">
           {/* Properties */}
-          <div className="space-y-4 py-4 border-y border-[#E0E0E1]">
+          <div className="relative space-y-4 py-4 border-b border-[#E0E0E1]">
+            {isSaving && (
+              <div className="absolute inset-0 z-10 rounded-xl bg-white/60 backdrop-blur-[1px] flex items-center justify-center">
+                <div className="flex items-center gap-2 text-sm text-[#6353FF]">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Guardando...
+                </div>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-6">
               <div className="space-y-4">
                 <div className="flex items-start text-sm gap-3">
@@ -250,7 +277,7 @@ export function TicketDetail() {
                       <select
                         value={draft.stage}
                         onChange={(e) => setDraft(prev => ({ ...prev, stage: e.target.value as TicketStage }))}
-                        className="mt-1 w-full bg-white border border-[#E0E0E1] rounded-xl px-3 py-2 text-sm text-[#3F4444] outline-none focus:ring-1 focus:ring-[#6353FF] transition-all"
+                        className="mt-1 w-full bg-white border border-[#E0E0E1] rounded-xl px-3 py-2 text-sm text-[#3F4444] outline-none focus:ring-1 focus:ring-[#6353FF] transition-all appearance-none"
                       >
                         {Object.entries(STAGES).map(([key, value]) => (
                           <option key={key} value={key}>{(value as any).label}</option>
@@ -276,7 +303,7 @@ export function TicketDetail() {
                       <select
                         value={draft.priority}
                         onChange={(e) => setDraft(prev => ({ ...prev, priority: e.target.value as TicketPriority }))}
-                        className="mt-1 w-full bg-white border border-[#E0E0E1] rounded-xl px-3 py-2 text-sm text-[#3F4444] outline-none focus:ring-1 focus:ring-[#6353FF] transition-all"
+                        className="mt-1 w-full bg-white border border-[#E0E0E1] rounded-xl px-3 py-2 text-sm text-[#3F4444] outline-none focus:ring-1 focus:ring-[#6353FF] transition-all appearance-none"
                       >
                         {Object.entries(PRIORITIES).map(([key, value]) => (
                           <option key={key} value={key}>{(value as any).label}</option>
@@ -302,7 +329,7 @@ export function TicketDetail() {
                       <select
                         value={draft.entity_id}
                         onChange={(e) => setDraft(prev => ({ ...prev, entity_id: e.target.value }))}
-                        className="mt-1 w-full bg-white border border-[#E0E0E1] rounded-xl px-3 py-2 text-sm text-[#3F4444] outline-none focus:ring-1 focus:ring-[#6353FF] transition-all"
+                        className="mt-1 w-full bg-white border border-[#E0E0E1] rounded-xl px-3 py-2 text-sm text-[#3F4444] outline-none focus:ring-1 focus:ring-[#6353FF] transition-all appearance-none"
                       >
                         <option value="">Sin entidad</option>
                         {entityOptions.map(option => (
@@ -329,7 +356,7 @@ export function TicketDetail() {
                       <select
                         value={draft.assigned_to}
                         onChange={(e) => setDraft(prev => ({ ...prev, assigned_to: e.target.value }))}
-                        className="mt-1 w-full bg-white border border-[#E0E0E1] rounded-xl px-3 py-2 text-sm text-[#3F4444] outline-none focus:ring-1 focus:ring-[#6353FF] transition-all"
+                        className="mt-1 w-full bg-white border border-[#E0E0E1] rounded-xl px-3 py-2 text-sm text-[#3F4444] outline-none focus:ring-1 focus:ring-[#6353FF] transition-all appearance-none"
                       >
                         {profileOptions.map(option => (
                           <option key={option.value || 'unassigned'} value={option.value}>{option.label}</option>
@@ -357,7 +384,7 @@ export function TicketDetail() {
                       <select
                         value={draft.ticket_type}
                         onChange={(e) => setDraft(prev => ({ ...prev, ticket_type: e.target.value }))}
-                        className="mt-1 w-full bg-white border border-[#E0E0E1] rounded-xl px-3 py-2 text-sm text-[#3F4444] outline-none focus:ring-1 focus:ring-[#6353FF] transition-all"
+                        className="mt-1 w-full bg-white border border-[#E0E0E1] rounded-xl px-3 py-2 text-sm text-[#3F4444] outline-none focus:ring-1 focus:ring-[#6353FF] transition-all appearance-none"
                       >
                         <option value="">Sin tipo</option>
                         {TICKET_TYPES.map(type => (
@@ -407,7 +434,7 @@ export function TicketDetail() {
                       type="button"
                       onClick={handleCancelChanges}
                       className="px-4 py-2 text-sm font-medium text-[#8A8F8F] hover:text-[#3F4444] hover:bg-[#F7F7F8] rounded-xl transition-colors"
-                      disabled={updateTicket.isPending}
+                      disabled={isSaving}
                     >
                       Cancelar
                     </button>
@@ -415,9 +442,9 @@ export function TicketDetail() {
                       type="button"
                       onClick={handleApplyChanges}
                       className="px-4 py-2 text-sm font-semibold bg-[#6353FF] hover:bg-[#5244e6] text-white rounded-xl transition-colors disabled:opacity-50"
-                      disabled={updateTicket.isPending}
+                      disabled={isSaving}
                     >
-                      {updateTicket.isPending ? 'Guardando...' : 'Aceptar'}
+                      {isSaving ? 'Guardando...' : 'Aceptar'}
                     </button>
                   </div>
                 )}

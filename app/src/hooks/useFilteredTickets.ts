@@ -14,6 +14,14 @@ export function useFilteredTickets(filters: TicketFilters) {
     if (!tickets) return []
     
     return tickets.filter(ticket => {
+      // Reference filter (ticket_ref)
+      if (filters.reference) {
+        const ref = filters.reference.trim()
+        if (ref && !ticket.ticket_ref.toString().includes(ref)) {
+          return false
+        }
+      }
+
       // Search filter (title, ref, entity name)
       if (filters.search) {
         const q = filters.search.toLowerCase()
@@ -34,18 +42,17 @@ export function useFilteredTickets(filters: TicketFilters) {
       }
       
       // Entity filter (multi-select)
-      if (filters.entity.length > 0 && ticket.entity_id && !filters.entity.includes(ticket.entity_id)) {
-        return false
+      if (filters.entity.length > 0) {
+        if (!ticket.entity_id || !filters.entity.includes(ticket.entity_id)) {
+          return false
+        }
       }
       
       // Application filter (multi-select)
-      if (filters.application.length > 0 && ticket.application && !filters.application.includes(ticket.application)) {
-        return false
-      }
-      
-      // Classification filter (multi-select)
-      if (filters.classification.length > 0 && ticket.classification && !filters.classification.includes(ticket.classification)) {
-        return false
+      if (filters.application.length > 0) {
+        if (!ticket.application || !filters.application.includes(ticket.application)) {
+          return false
+        }
       }
       
       // Assigned to filter (multi-select)

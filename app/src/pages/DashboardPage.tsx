@@ -13,17 +13,16 @@ import { STAGES, PRIORITIES } from '../lib/supabase'
 
 // Updated filters to support multi-select (arrays)
 export type TicketFilters = {
+  reference: string
   search: string
   priority: string[]  // Changed to array
   stage: string[]     // Changed to array
   entity: string[]    // Changed to array
   application: string[]
-  classification: string[]
   assignedTo: string[]
 }
 
 const APPLICATIONS = ['Mojito360', 'Wintruck', 'Odoo', 'Otros']
-const CLASSIFICATIONS = ['Soporte', 'Desarrollo']
 
 // Convert STAGES to options format
 const STAGE_OPTIONS = Object.entries(STAGES).map(([key, value]) => ({
@@ -40,7 +39,6 @@ const PRIORITY_OPTIONS = Object.entries(PRIORITIES).map(([key, value]) => ({
 }))
 
 const APPLICATION_OPTIONS = APPLICATIONS.map(app => ({ value: app, label: app }))
-const CLASSIFICATION_OPTIONS = CLASSIFICATIONS.map(c => ({ value: c, label: c }))
 
 export function DashboardPage() {
   const navigate = useNavigate()
@@ -49,12 +47,12 @@ export function DashboardPage() {
   const [showFilters, setShowFilters] = useState(false)
   
   const [filters, setFilters] = useState<TicketFilters>({
+    reference: '',
     search: '',
     priority: [],
     stage: [],
     entity: [],
     application: [],
-    classification: [],
     assignedTo: []
   })
   
@@ -74,24 +72,24 @@ export function DashboardPage() {
 
   const clearFilters = () => {
     setFilters({
+      reference: '',
       search: '',
       priority: [],
       stage: [],
       entity: [],
       application: [],
-      classification: [],
       assignedTo: []
     })
   }
 
   // Count active filters (arrays with length > 0)
   const activeFilterCount = 
+    (filters.reference ? 1 : 0) +
     (filters.search ? 1 : 0) +
     filters.priority.length +
     filters.stage.length +
     filters.entity.length +
     filters.application.length +
-    filters.classification.length +
     filters.assignedTo.length
 
   // Convert entities and profiles to options
@@ -219,6 +217,21 @@ export function DashboardPage() {
             {showFilters && (
               <div className="px-6 py-4 bg-[#FAFAFA] border-t border-[#E0E0E1] animate-in slide-in-from-top-2 duration-200">
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                  {/* Reference - Number input */}
+                  <div className="space-y-1">
+                    <label className="block mb-1.5 text-[10px] uppercase font-bold text-[#8A8F8F] tracking-wider">
+                      Referencia
+                    </label>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      placeholder="Ej: 123"
+                      value={filters.reference}
+                      onChange={(e) => updateFilter('reference', e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-[#E0E0E1] rounded-xl text-sm text-[#3F4444] placeholder:text-[#B0B5B5] outline-none focus:ring-2 focus:ring-[#6353FF] focus:ring-opacity-30 focus:border-[#6353FF] transition-all"
+                    />
+                  </div>
+
                   {/* Priority - Multi-select */}
                   <MultiSelect
                     label="Prioridad"
@@ -252,15 +265,6 @@ export function DashboardPage() {
                     options={APPLICATION_OPTIONS}
                     value={filters.application}
                     onChange={(v) => updateFilter('application', v)}
-                    placeholder="Todas"
-                  />
-
-                  {/* Classification - Multi-select */}
-                  <MultiSelect
-                    label="Clasificación"
-                    options={CLASSIFICATION_OPTIONS}
-                    value={filters.classification}
-                    onChange={(v) => updateFilter('classification', v)}
                     placeholder="Todas"
                   />
 
