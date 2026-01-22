@@ -37,7 +37,9 @@ const TICKET_TYPES = [
   '⏱️ Rendimiento', '💕 Mapeos', '💎 Gestión del soporte', '🔎 Control'
 ]
 
-type EditableField = 'stage' | 'priority' | 'entity_id' | 'assigned_to' | 'ticket_type'
+const APPLICATION_OPTIONS = ['Mojito360', 'Wintruck', 'Odoo', 'Otros']
+
+type EditableField = 'stage' | 'priority' | 'entity_id' | 'assigned_to' | 'ticket_type' | 'application'
 
 export function TicketDetail() {
   const { id } = useParams<{ id: string }>()
@@ -69,6 +71,7 @@ export function TicketDetail() {
     entity_id: '' as string,
     assigned_to: '' as string,
     ticket_type: '' as string,
+    application: '' as string,
   })
 
   useEffect(() => {
@@ -79,6 +82,7 @@ export function TicketDetail() {
       entity_id: ticket.entity_id || '',
       assigned_to: ticket.assigned_to || '',
       ticket_type: ticket.ticket_type || '',
+      application: ticket.application || '',
     })
     setEditingFields(new Set())
   }, [ticket])
@@ -114,7 +118,8 @@ export function TicketDetail() {
       draft.priority !== ticket.priority ||
       (draft.entity_id || null) !== ticket.entity_id ||
       (draft.assigned_to || null) !== ticket.assigned_to ||
-      (draft.ticket_type || '') !== (ticket.ticket_type || '')
+      (draft.ticket_type || '') !== (ticket.ticket_type || '') ||
+      (draft.application || '') !== (ticket.application || '')
     )
   }, [draft, ticket])
 
@@ -202,6 +207,7 @@ export function TicketDetail() {
       if ((draft.entity_id || null) !== ticket.entity_id) updates.entity_id = draft.entity_id || null
       if ((draft.assigned_to || null) !== ticket.assigned_to) updates.assigned_to = draft.assigned_to || null
       if ((draft.ticket_type || '') !== (ticket.ticket_type || '')) updates.ticket_type = draft.ticket_type || null
+      if ((draft.application || '') !== (ticket.application || '')) updates.application = draft.application || null
 
       await updateTicket.mutateAsync(updates)
       setEditingFields(new Set())
@@ -220,6 +226,7 @@ export function TicketDetail() {
       entity_id: ticket.entity_id || '',
       assigned_to: ticket.assigned_to || '',
       ticket_type: ticket.ticket_type || '',
+      application: ticket.application || '',
     })
     setEditingFields(new Set())
   }
@@ -383,7 +390,26 @@ export function TicketDetail() {
                   <Tag className="w-4 h-4 text-[#8A8F8F] mt-0.5" />
                   <div className="flex-1">
                     <span className="text-[#8A8F8F] block">Aplicación</span>
-                    <span className="text-[#3F4444] font-medium">{ticket.application || '---'}</span>
+                    {editingFields.has('application') ? (
+                      <select
+                        value={draft.application}
+                        onChange={(e) => setDraft(prev => ({ ...prev, application: e.target.value }))}
+                        className="mt-1 w-full bg-white border border-[#E0E0E1] rounded-xl px-3 py-2 text-sm text-[#3F4444] outline-none focus:ring-1 focus:ring-[#6353FF] transition-all appearance-none"
+                      >
+                        <option value="">Sin aplicación</option>
+                        {APPLICATION_OPTIONS.map(option => (
+                          <option key={option} value={option}>{option}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => enableEdit('application')}
+                        className="text-left text-[#3F4444] font-medium hover:text-[#6353FF] transition-colors"
+                      >
+                        {ticket.application || '---'}
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
