@@ -8,6 +8,7 @@ import { NewTicketPage } from './pages/NewTicketPage'
 import { InboxPage } from './pages/InboxPage'
 import { MyTicketsPage } from './pages/MyTicketsPage'
 import { ArchivePage } from './pages/ArchivePage'
+import { UsersPage } from './pages/UsersPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -76,6 +77,9 @@ function App() {
                   {/* Archive */}
                   <Route path="/archive" element={<ArchivePage />} />
                   <Route path="/archive/:id" element={<ArchivePage />} />
+
+                  {/* Users */}
+                  <Route path="/users" element={<UsersPage />} />
                 </Routes>
               </ProtectedRoute>
             }

@@ -236,7 +236,7 @@ export function TicketDetail() {
         </div>
         <div className="flex items-center gap-2">
           <a
-            href={`https://sso.mojito360.com/resources/support/detail-case/${ticket.ticket_ref}`}
+            href={`https://app.mojito360.com/resources/support/detail-case/${ticket.ticket_ref}`}
             target="_blank"
             rel="noreferrer"
             className="p-1.5 hover:bg-[#F7F7F8] rounded-lg text-[#8A8F8F] transition-colors"

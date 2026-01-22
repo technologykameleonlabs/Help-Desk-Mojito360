@@ -23,13 +23,13 @@ load_dotenv('.env.local')
 
 SUPABASE_URL = os.getenv('VITE_SUPABASE_URL')
 # Use service key for admin operations (bypasses RLS), fallback to anon key
-SUPABASE_KEY = os.getenv('SUPABASE_SERVICE_KEY') or os.getenv('VITE_SUPABASE_ANON_KEY')
+SUPABASE_KEY = os.getenv('VITE_SUPABASE_SERVICE_KEY') or os.getenv('VITE_SUPABASE_ANON_KEY')
 
 if not SUPABASE_URL or not SUPABASE_KEY:
-    print("Error: Missing VITE_SUPABASE_URL and (SUPABASE_SERVICE_KEY or VITE_SUPABASE_ANON_KEY) in .env.local")
+    print("Error: Missing VITE_SUPABASE_URL and (VITE_SUPABASE_SERVICE_KEY or VITE_SUPABASE_ANON_KEY) in .env.local")
     sys.exit(1)
 
-if os.getenv('SUPABASE_SERVICE_KEY'):
+if os.getenv('VITE_SUPABASE_SERVICE_KEY'):
     print("Using service role key (admin access)")
 else:
     print("Warning: Using anon key - may have RLS restrictions")

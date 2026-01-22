@@ -4,6 +4,7 @@ import {
   Inbox, 
   User, 
   Archive, 
+  Users,
   LogOut,
   Plus
 } from 'lucide-react'
@@ -20,6 +21,9 @@ const navItems = [
 export function Sidebar() {
   const navigate = useNavigate()
   const { data: user } = useCurrentUser()
+  const adminItems = user?.role === 'admin'
+    ? [{ to: '/users', icon: Users, label: 'Usuarios' }]
+    : []
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
@@ -49,7 +53,7 @@ export function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 px-3 py-2 space-y-1">
-        {navItems.map(({ to, icon: Icon, label }) => (
+        {[...navItems, ...adminItems].map(({ to, icon: Icon, label }) => (
           <NavLink
             key={to}
             to={to}
