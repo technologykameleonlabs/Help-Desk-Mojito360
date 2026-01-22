@@ -1,4 +1,4 @@
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import { 
   useTicket, 
   useUpdateTicket, 
@@ -42,6 +42,7 @@ type EditableField = 'stage' | 'priority' | 'entity_id' | 'assigned_to' | 'ticke
 export function TicketDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const location = useLocation()
   const { data: ticket, isLoading, error, isFetching } = useTicket(id!)
   const { data: comments } = useComments(id!)
   const { data: profiles } = useProfiles()
@@ -128,6 +129,14 @@ export function TicketDetail() {
     selectedEntity?.assigned_to_profile?.email ||
     ''
 
+  const closePath = useMemo(() => {
+    const path = location.pathname
+    if (path.startsWith('/my-tickets')) return '/my-tickets'
+    if (path.startsWith('/inbox')) return '/inbox'
+    if (path.startsWith('/archive')) return '/archive'
+    return '/'
+  }, [location.pathname])
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full w-[600px] bg-white border-l border-[#E0E0E1]">
@@ -141,7 +150,7 @@ export function TicketDetail() {
       <div className="flex flex-col items-center justify-center h-full w-[600px] bg-white border-l border-[#E0E0E1] text-[#8A8F8F] gap-4">
         <AlertCircle className="w-12 h-12 text-[#E0E0E1]" />
         <p>No se encontró el ticket o hubo un error.</p>
-        <button onClick={() => navigate('/')} className="text-[#6353FF] hover:underline">
+        <button onClick={() => navigate(closePath)} className="text-[#6353FF] hover:underline">
           Volver al Dashboard
         </button>
       </div>
@@ -259,7 +268,7 @@ export function TicketDetail() {
             </a>
           ) : null}
           <button 
-            onClick={() => navigate('/')}
+            onClick={() => navigate(closePath)}
             className="p-1.5 hover:bg-[#F7F7F8] rounded-lg text-[#8A8F8F] transition-colors"
           >
             <X className="w-5 h-5" />

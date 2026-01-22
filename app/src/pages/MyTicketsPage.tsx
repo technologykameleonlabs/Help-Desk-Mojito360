@@ -3,13 +3,14 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { Sidebar } from '../components/Sidebar'
 import { TicketList } from '../components/TicketList'
 import { TicketDetail } from '../components/TicketDetail'
+import { TicketCard } from '../components/KanbanBoard'
 import { LayoutGrid, List, Loader2, User } from 'lucide-react'
 import { useRealtimeTickets } from '../hooks/useRealtime'
 import { useTickets, useCurrentUser } from '../hooks/useData'
 import type { TicketStage, Ticket } from '../lib/supabase'
-import { STAGES, PRIORITIES } from '../lib/supabase'
+import { STAGES } from '../lib/supabase'
 
-// Mini Kanban Column (reused from InboxPage pattern)
+// Mini Kanban Column using Dashboard cards
 function MiniKanbanColumn({ 
   stage, 
   tickets, 
@@ -22,32 +23,21 @@ function MiniKanbanColumn({
   const config = STAGES[stage]
   
   return (
-    <div className="flex-shrink-0 w-72">
-      <div className="flex items-center gap-2 mb-3 px-1">
+    <div className="flex-shrink-0 w-80">
+      <div className="flex items-center gap-2 mb-4 px-1">
         <div className={`w-2 h-2 rounded-full ${config.color}`} />
-        <h2 className="text-xs font-bold text-[#5A5F5F] uppercase tracking-widest">{config.label}</h2>
-        <span className="text-xs text-[#8A8F8F] ml-auto font-mono bg-white px-2 py-0.5 rounded border border-[#E0E0E1]">{tickets.length}</span>
+        <h2 className="text-sm font-bold text-[#5A5F5F] uppercase tracking-widest">{config.label}</h2>
+        <span className="text-xs text-[#8A8F8F] ml-auto font-mono bg-[#F7F7F8] px-2 py-0.5 rounded border border-[#E0E0E1]">{tickets.length}</span>
       </div>
       
-      <div className="space-y-2 min-h-[400px] p-2 rounded-xl bg-white border border-[#E0E0E1]">
-        {tickets.map(ticket => {
-          const priority = PRIORITIES[ticket.priority]
-          return (
-            <div
-              key={ticket.id}
-              onClick={() => onTicketClick(ticket.id)}
-              className="p-3 bg-[#FAFAFA] border border-[#E0E0E1] rounded-lg cursor-pointer hover:border-[#6353FF] hover:shadow-sm transition-all"
-            >
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-[10px] font-mono text-[#8A8F8F]">#{ticket.ticket_ref}</span>
-                <span className={`text-[8px] px-1.5 py-0.5 rounded font-bold uppercase ${priority.color} text-white`}>
-                  {priority.label}
-                </span>
-              </div>
-              <p className="text-sm font-medium text-[#3F4444] line-clamp-2">{ticket.title}</p>
-            </div>
-          )
-        })}
+      <div className="space-y-3 min-h-[500px] p-2 rounded-xl bg-[#F7F7F8] border border-[#ECECED]">
+        {tickets.map(ticket => (
+          <TicketCard
+            key={ticket.id}
+            ticket={ticket}
+            onClick={() => onTicketClick(ticket.id)}
+          />
+        ))}
         {tickets.length === 0 && (
           <div className="text-center py-8 text-[#B0B5B5] text-xs">Sin tickets</div>
         )}
@@ -67,11 +57,11 @@ export function MyTicketsPage() {
   
   useRealtimeTickets()
   
-  // Filter: tickets assigned to current user (excluding archived)
+  // Filter: tickets assigned to current user or entity responsible (excluding archived)
   const tickets = useMemo(() => {
     if (!allTickets || !currentUser) return []
     return allTickets.filter(t => 
-      t.assigned_to === currentUser.id && 
+      (t.assigned_to === currentUser.id || t.entity?.assigned_to === currentUser.id) &&
       !['done', 'cancelled', 'paused'].includes(t.stage)
     )
   }, [allTickets, currentUser])
@@ -114,7 +104,7 @@ export function MyTicketsPage() {
             <div className="flex items-center gap-3">
               <User className="w-5 h-5 text-[#6353FF]" />
               <h1 className="text-lg font-semibold text-[#3F4444]">Mis Tickets</h1>
-              <span className="text-sm text-[#8A8F8F]">({tickets.length} asignados)</span>
+              <span className="text-sm text-[#8A8F8F]">({tickets.length} tickets)</span>
             </div>
             
             <div className="flex items-center gap-1">

@@ -42,7 +42,7 @@ type TicketCardProps = {
   dragListeners?: React.HTMLAttributes<HTMLDivElement>
 }
 
-const TicketCard = forwardRef<HTMLDivElement, TicketCardProps>(function TicketCard(
+export const TicketCard = forwardRef<HTMLDivElement, TicketCardProps>(function TicketCard(
   { ticket, onClick, isDragging, isOverlay, style, dragAttributes, dragListeners },
   ref
 ) {
