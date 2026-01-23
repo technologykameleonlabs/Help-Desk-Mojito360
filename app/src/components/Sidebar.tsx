@@ -18,6 +18,14 @@ import { supabase } from '../lib/supabase'
 import { useCurrentUser } from '../hooks/useData'
 import { useUnreadNotificationCount } from '../hooks/useNotifications'
 import { useRealtimeNotifications } from '../hooks/useRealtime'
+import type { ComponentType } from 'react'
+
+type NavItem = {
+  to: string
+  icon: ComponentType<{ className?: string }>
+  label: string
+  badge?: string | number
+}
 
 export function Sidebar() {
   const navigate = useNavigate()
@@ -30,14 +38,14 @@ export function Sidebar() {
   const badgeText =
     unreadCount && unreadCount > 99 ? '99+' : unreadCount || 0
 
-  const navItems = [
+  const navItems: NavItem[] = [
     { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
     { to: '/inbox', icon: Inbox, label: 'Inbox' },
     { to: '/my-tickets', icon: User, label: 'Mis Tickets' },
     { to: '/archive', icon: Archive, label: 'Archivo' },
     { to: '/notifications', icon: Bell, label: 'Notificaciones', badge: badgeText },
   ]
-  const adminItems = user?.role === 'admin'
+  const adminItems: NavItem[] = user?.role === 'admin'
     ? [
         { to: '/users', icon: Users, label: 'Usuarios' },
         { to: '/entities', icon: Building2, label: 'Entidades' },
