@@ -34,7 +34,8 @@ import {
   History,
   ChevronUp,
   ChevronDown,
-  Paperclip
+  Paperclip,
+  Plus
 } from 'lucide-react'
 import { STAGES, PRIORITIES, type TicketStage, type TicketPriority, type Ticket } from '../lib/supabase'
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
@@ -853,7 +854,7 @@ export function TicketDetail() {
           </button>
         </>
       ) : (
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 flex flex-col min-h-0">
           <div className="px-6 py-4 border-b border-[#E0E0E1] flex items-center justify-between">
             <div className="flex items-center gap-2">
               <MessageSquare className="w-4 h-4 text-[#8A8F8F]" />
@@ -871,7 +872,7 @@ export function TicketDetail() {
             </button>
           </div>
 
-          <div className="flex-1 overflow-auto p-6 space-y-4">
+          <div className="flex-1 overflow-auto p-6 space-y-4 min-h-0">
             {visibleComments.length ? (
               visibleComments.map((comment) => (
                 <div 
@@ -1026,13 +1027,6 @@ export function TicketDetail() {
                   <h3 className="text-sm font-semibold text-[#3F4444]">
                     Adjuntos ({pendingCommentFiles.length})
                   </h3>
-                  <button
-                    type="button"
-                    onClick={() => setIsAttachmentModalOpen(false)}
-                    className="text-xs text-[#8A8F8F] hover:text-[#3F4444]"
-                  >
-                    Cerrar
-                  </button>
                 </div>
                 {commentUploading && (
                   <div className="flex items-center gap-2 text-xs text-[#8A8F8F]">
@@ -1058,6 +1052,7 @@ export function TicketDetail() {
                   onClick={() => commentFileInputRef.current?.click()}
                   className="inline-flex items-center gap-2 px-3 py-2 text-xs font-medium text-[#8A8F8F] hover:text-[#3F4444] hover:bg-[#F7F7F8] rounded-xl transition-colors"
                 >
+                  <Plus className="w-4 h-4" />
                   Agregar archivos
                 </button>
                 {commentUploadError && (
@@ -1084,6 +1079,27 @@ export function TicketDetail() {
                 ) : (
                   <div className="text-xs text-[#8A8F8F]">No hay archivos seleccionados.</div>
                 )}
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#ECECED]">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPendingCommentFiles([])
+                      setIsAttachmentModalOpen(false)
+                    }}
+                    className="px-4 py-2 text-xs font-medium text-[#8A8F8F] hover:text-[#3F4444] hover:bg-[#F7F7F8] rounded-xl transition-colors"
+                    disabled={commentUploading}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsAttachmentModalOpen(false)}
+                    className="px-4 py-2 text-xs font-semibold bg-[#6353FF] hover:bg-[#5244e6] text-white rounded-xl transition-colors disabled:opacity-50"
+                    disabled={commentUploading}
+                  >
+                    Aceptar
+                  </button>
+                </div>
               </div>
             </div>
           )}

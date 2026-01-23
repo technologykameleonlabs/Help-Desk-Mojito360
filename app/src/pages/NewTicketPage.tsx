@@ -115,9 +115,7 @@ export function NewTicketPage() {
   }
 
   const uploadTicketAttachments = async (ticketId: string) => {
-    if (pendingFiles.length === 0) {
-      throw new Error('Debes adjuntar al menos un archivo.')
-    }
+    if (pendingFiles.length === 0) return
 
     setUploading(true)
     setUploadError(null)
@@ -160,10 +158,6 @@ export function NewTicketPage() {
 
   const onSubmit = async (values: TicketFormValues) => {
     try {
-      if (pendingFiles.length === 0) {
-        setUploadError('Debes adjuntar al menos un archivo.')
-        return
-      }
       const created = await createTicket.mutateAsync({
         ...values,
         stage: 'new' as TicketStage,
@@ -238,7 +232,7 @@ export function NewTicketPage() {
 
               <div className="space-y-2">
                 <label className="block text-sm font-medium text-[#3F4444] mb-2">
-                  Adjuntos (obligatorio)
+                  Adjuntos (opcional)
                 </label>
                 <input
                   ref={fileInputRef}
