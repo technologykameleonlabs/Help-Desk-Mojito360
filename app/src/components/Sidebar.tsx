@@ -1,32 +1,42 @@
 import { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
-import { 
-  LayoutDashboard, 
-  Inbox, 
-  User, 
-  Archive, 
+import {
+  LayoutDashboard,
+  Inbox,
+  User,
+  Archive,
   Users,
   Building2,
   Tag,
   ChevronRight,
   ChevronLeft,
   LogOut,
-  Plus
+  Plus,
+  Bell
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useCurrentUser } from '../hooks/useData'
-
-const navItems = [
-  { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/inbox', icon: Inbox, label: 'Inbox' },
-  { to: '/my-tickets', icon: User, label: 'Mis Tickets' },
-  { to: '/archive', icon: Archive, label: 'Archivo' },
-]
+import { useUnreadNotificationCount } from '../hooks/useNotifications'
+import { useRealtimeNotifications } from '../hooks/useRealtime'
 
 export function Sidebar() {
   const navigate = useNavigate()
   const [collapsed, setCollapsed] = useState(true)
   const { data: user } = useCurrentUser()
+  const { data: unreadCount } = useUnreadNotificationCount()
+
+  useRealtimeNotifications()
+
+  const badgeText =
+    unreadCount && unreadCount > 99 ? '99+' : unreadCount || 0
+
+  const navItems = [
+    { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
+    { to: '/inbox', icon: Inbox, label: 'Inbox' },
+    { to: '/my-tickets', icon: User, label: 'Mis Tickets' },
+    { to: '/archive', icon: Archive, label: 'Archivo' },
+    { to: '/notifications', icon: Bell, label: 'Notificaciones', badge: badgeText },
+  ]
   const adminItems = user?.role === 'admin'
     ? [
         { to: '/users', icon: Users, label: 'Usuarios' },
@@ -81,7 +91,7 @@ export function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 px-3 py-2 space-y-1">
-        {[...navItems, ...adminItems].map(({ to, icon: Icon, label }) => (
+        {[...navItems, ...adminItems].map(({ to, icon: Icon, label, badge }) => (
           <NavLink
             key={to}
             to={to}
@@ -94,7 +104,14 @@ export function Sidebar() {
               }`
             }
           >
-            <Icon className="w-5 h-5" />
+            <div className="relative">
+              <Icon className="w-5 h-5" />
+              {!!badge && (
+                <span className="absolute -top-1.5 -right-2 min-w-[18px] h-[18px] px-1 rounded-full bg-[#6353FF] text-white text-[10px] font-semibold flex items-center justify-center">
+                  {badge}
+                </span>
+              )}
+            </div>
             {!collapsed && label}
           </NavLink>
         ))}

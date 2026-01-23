@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Sidebar } from '../components/Sidebar'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { useCurrentUser, useEntities, useProfiles, useUpdateEntities, useUpdateEntity } from '../hooks/useData'
+import { sendNotificationEmails, useCreateNotifications } from '../hooks/useNotifications'
 import type { Entity } from '../lib/supabase'
 import { Building2, Shield, Loader2, Users } from 'lucide-react'
 
@@ -13,6 +14,7 @@ export function EntitiesPage() {
   const { data: profiles, isLoading: loadingProfiles } = useProfiles()
   const updateEntity = useUpdateEntity()
   const updateEntities = useUpdateEntities()
+  const createNotifications = useCreateNotifications()
 
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [bulkOpen, setBulkOpen] = useState(false)
@@ -53,7 +55,14 @@ export function EntitiesPage() {
   const filteredEntities = useMemo(() => {
     const query = searchTerm.trim().toLowerCase()
     if (!query) return entityList
-    return entityList.filter(entity => entity.name.toLowerCase().includes(query))
+    return entityList.filter(entity => {
+      const nameMatches = entity.name.toLowerCase().includes(query)
+      const assigneeEmail = entity.assigned_to_profile?.email?.toLowerCase() ?? ''
+      const assigneeName = entity.assigned_to_profile?.full_name?.toLowerCase() ?? ''
+      const assigneeMatches =
+        assigneeEmail.includes(query) || assigneeName.includes(query)
+      return nameMatches || assigneeMatches
+    })
   }, [entityList, searchTerm])
 
   const allSelected =
@@ -119,13 +128,33 @@ export function EntitiesPage() {
 
   const handleSaveSingle = async () => {
     if (!editingId) return
+    const currentEntity = entityList.find(entity => entity.id === editingId)
+    const previousAssignee = currentEntity?.assigned_to ?? null
+    const nextAssignee = draftAssignee || null
     setAwaitingRefresh(true)
     setPendingSingleId(editingId)
     try {
       await updateEntity.mutateAsync({
         id: editingId,
-        assigned_to: draftAssignee || null,
+        assigned_to: nextAssignee,
       })
+
+      if (
+        nextAssignee &&
+        nextAssignee !== previousAssignee &&
+        nextAssignee !== currentUser?.id
+      ) {
+        const notificationIds = await createNotifications.mutateAsync([
+          {
+            user_id: nextAssignee,
+            entity_id: editingId,
+            type: 'entity_assignment',
+            triggered_by: currentUser?.id ?? null,
+            message: `Te asignaron como responsable de la entidad: ${currentEntity?.name || 'Entidad'}`,
+          }
+        ])
+        await sendNotificationEmails(notificationIds)
+      }
     } catch (error) {
       console.error(error)
       alert('No se pudo actualizar el responsable.')
@@ -143,6 +172,27 @@ export function EntitiesPage() {
         ids: selectedIds,
         updates: { assigned_to: bulkAssignee || null },
       })
+
+      const nextAssignee = bulkAssignee || null
+      if (nextAssignee && nextAssignee !== currentUser?.id) {
+        const selectedEntities = entityList.filter(entity => selectedIds.includes(entity.id))
+        const entityNames = selectedEntities.map(entity => entity.name)
+        const visibleNames = entityNames.slice(0, 5)
+        const remaining = entityNames.length - visibleNames.length
+        const summary = remaining > 0
+          ? `${visibleNames.join(', ')} y ${remaining} más`
+          : visibleNames.join(', ')
+
+        const notificationIds = await createNotifications.mutateAsync([
+          {
+            user_id: nextAssignee,
+            type: 'entity_assignment',
+            triggered_by: currentUser?.id ?? null,
+            message: `Te asignaron como responsable de ${entityNames.length} entidades: ${summary}`,
+          }
+        ])
+        await sendNotificationEmails(notificationIds)
+      }
     } catch (error) {
       console.error(error)
       alert('No se pudieron actualizar las entidades.')
@@ -184,7 +234,7 @@ export function EntitiesPage() {
                 type="search"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Buscar entidad..."
+                placeholder="Buscar entidad o responsable..."
                 className="w-64 px-3 py-2 bg-white border border-[#E0E0E1] rounded-xl text-sm text-[#3F4444] font-normal outline-none focus:ring-2 focus:ring-[#6353FF] focus:ring-opacity-30 focus:border-[#6353FF] transition-all"
               />
             </div>

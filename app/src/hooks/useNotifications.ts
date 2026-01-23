@@ -4,13 +4,33 @@ import { supabase } from '../lib/supabase'
 export type Notification = {
   id: string
   user_id: string
-  ticket_id: string
-  type: 'mention' | 'assignment' | 'status_change' | 'new_comment'
+  ticket_id: string | null
+  entity_id?: string | null
+  type: 'mention' | 'assignment' | 'status_change' | 'new_comment' | 'entity_assignment'
   triggered_by: string | null
   message: string | null
   is_read: boolean
   is_email_sent: boolean
   created_at: string
+}
+
+type NewNotification = {
+  user_id: string
+  ticket_id?: string | null
+  entity_id?: string | null
+  type: 'mention' | 'assignment' | 'status_change' | 'new_comment' | 'entity_assignment'
+  triggered_by?: string | null
+  message?: string | null
+  is_read?: boolean
+  is_email_sent?: boolean
+}
+
+export async function sendNotificationEmails(notificationIds: string[]) {
+  if (notificationIds.length === 0) return
+  const { error } = await supabase.functions.invoke('send-notification-email', {
+    body: { notificationIds },
+  })
+  if (error) throw error
 }
 
 // Fetch user's notifications
@@ -96,6 +116,34 @@ export function useMarkAllNotificationsRead() {
   })
 }
 
+// Create generic notifications
+export function useCreateNotifications() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (notifications: NewNotification[]) => {
+      if (notifications.length === 0) return []
+      const { data, error } = await supabase
+        .from('notifications')
+        .insert(
+          notifications.map(notification => ({
+            ...notification,
+            is_read: notification.is_read ?? false,
+            is_email_sent: notification.is_email_sent ?? false,
+          }))
+        )
+        .select('id')
+
+      if (error) throw error
+      return (data || []).map(item => item.id as string)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications'] })
+      queryClient.invalidateQueries({ queryKey: ['notifications', 'unread_count'] })
+    }
+  })
+}
+
 // Create mention notifications and comment_mentions entries
 export function useCreateMentionNotifications() {
   const queryClient = useQueryClient()
@@ -146,17 +194,20 @@ export function useCreateMentionNotifications() {
         }))
 
       if (notifications.length > 0) {
-        const { error: notifError } = await supabase
+        const { data: notificationRows, error: notifError } = await supabase
           .from('notifications')
           .insert(notifications)
+          .select('id')
 
         if (notifError) throw notifError
+        return { success: true, notificationIds: (notificationRows || []).map(item => item.id as string) }
       }
 
-      return { success: true }
+      return { success: true, notificationIds: [] as string[] }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] })
+      queryClient.invalidateQueries({ queryKey: ['notifications', 'unread_count'] })
     }
   })
 }

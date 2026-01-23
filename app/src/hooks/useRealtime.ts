@@ -73,3 +73,44 @@ export function useRealtimeComments(ticketId: string) {
     }
   }, [ticketId, queryClient])
 }
+
+/**
+ * Hook to subscribe to realtime changes on notifications for the current user.
+ */
+export function useRealtimeNotifications() {
+  const queryClient = useQueryClient()
+
+  useEffect(() => {
+    let channel: ReturnType<typeof supabase.channel> | null = null
+    let isActive = true
+
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!isActive || !user) return
+
+      channel = supabase
+        .channel(`notifications-${user.id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'notifications',
+            filter: `user_id=eq.${user.id}`,
+          },
+          (payload) => {
+            console.log('[Realtime] Notification change:', payload.eventType)
+            queryClient.invalidateQueries({ queryKey: ['notifications'] })
+            queryClient.invalidateQueries({ queryKey: ['notifications', 'unread_count'] })
+          }
+        )
+        .subscribe()
+    })
+
+    return () => {
+      isActive = false
+      if (channel) {
+        supabase.removeChannel(channel)
+      }
+    }
+  }, [queryClient])
+}

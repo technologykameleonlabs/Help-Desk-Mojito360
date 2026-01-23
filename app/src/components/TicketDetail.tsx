@@ -12,7 +12,7 @@ import {
   useUpdateTicketLabels,
   useCurrentUser
 } from '../hooks/useData'
-import { useCreateMentionNotifications } from '../hooks/useNotifications'
+import { sendNotificationEmails, useCreateMentionNotifications, useCreateNotifications } from '../hooks/useNotifications'
 import { useRealtimeComments } from '../hooks/useRealtime'
 import { MentionTextarea, extractMentions } from './MentionTextarea'
 import { useAttachments, useDeleteAttachment } from '../hooks/useAttachments'
@@ -93,6 +93,7 @@ export function TicketDetail() {
 
   const createComment = useCreateComment()
   const createMentionNotifications = useCreateMentionNotifications()
+  const createNotifications = useCreateNotifications()
   
   const [commentText, setCommentText] = useState('')
   const [isInternal, setIsInternal] = useState(false)
@@ -341,11 +342,14 @@ export function TicketDetail() {
       
       // Create notifications for mentioned users
       if (allMentions.length > 0 && result?.id) {
-        await createMentionNotifications.mutateAsync({
+        const { notificationIds } = await createMentionNotifications.mutateAsync({
           commentId: result.id,
           ticketId: ticket.id,
           mentionedUserIds: allMentions
         })
+        if (notificationIds.length > 0) {
+          await sendNotificationEmails(notificationIds)
+        }
       }
 
       if (result?.id) {
@@ -415,6 +419,28 @@ export function TicketDetail() {
 
       if (Object.keys(updates).length > 1) {
         await updateTicket.mutateAsync(updates)
+      }
+
+      const assignedChanged =
+        (draft.assigned_to || null) !== (ticket.assigned_to || null)
+      const nextAssignee = draft.assigned_to || null
+
+      if (
+        assignedChanged &&
+        nextAssignee &&
+        nextAssignee !== currentUser?.id
+      ) {
+        const notificationIds = await createNotifications.mutateAsync([
+          {
+            user_id: nextAssignee,
+            ticket_id: ticket.id,
+            type: 'assignment',
+            triggered_by: currentUser?.id ?? null,
+            message: `Te asignaron el ticket #${ticket.ticket_ref}: ${ticket.title}`,
+          }
+        ])
+
+        await sendNotificationEmails(notificationIds)
       }
 
       if (labelsChanged) {

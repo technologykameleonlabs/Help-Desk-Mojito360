@@ -11,6 +11,7 @@ import { ArchivePage } from './pages/ArchivePage'
 import { UsersPage } from './pages/UsersPage'
 import { EntitiesPage } from './pages/EntitiesPage'
 import { LabelsPage } from './pages/LabelsPage'
+import { NotificationsPage } from './pages/NotificationsPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -88,6 +89,9 @@ function App() {
 
                   {/* Labels */}
                   <Route path="/labels" element={<LabelsPage />} />
+
+                  {/* Notifications */}
+                  <Route path="/notifications" element={<NotificationsPage />} />
                 </Routes>
               </ProtectedRoute>
             }
