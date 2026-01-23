@@ -195,13 +195,17 @@ export function TicketDetail() {
     setCommentUploadError(null)
 
     try {
+      const ticketId = ticket?.id
+      if (!ticketId) {
+        throw new Error('Ticket no disponible')
+      }
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('No autenticado')
 
       for (const file of pendingCommentFiles) {
         const timestamp = Date.now()
         const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_')
-        const storagePath = `${user.id}/${ticket.id}/${timestamp}_${safeName}`
+        const storagePath = `${user.id}/${ticketId}/${timestamp}_${safeName}`
 
         const { error: uploadError } = await supabase.storage
           .from('ticket-attachments')
@@ -212,7 +216,7 @@ export function TicketDetail() {
         const { error: dbError } = await supabase
           .from('attachments')
           .insert({
-            ticket_id: ticket.id,
+            ticket_id: ticketId,
             comment_id: commentId,
             uploaded_by: user.id,
             file_name: file.name,
@@ -225,8 +229,8 @@ export function TicketDetail() {
       }
 
       setPendingCommentFiles([])
-      await queryClient.invalidateQueries({ queryKey: ['attachments', ticket.id] })
-      await queryClient.refetchQueries({ queryKey: ['attachments', ticket.id] })
+      await queryClient.invalidateQueries({ queryKey: ['attachments', ticketId] })
+      await queryClient.refetchQueries({ queryKey: ['attachments', ticketId] })
     } catch (err: any) {
       console.error('Upload error:', err)
       setCommentUploadError(err.message || 'Error al subir archivos')
