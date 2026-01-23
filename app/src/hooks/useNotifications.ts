@@ -27,8 +27,30 @@ type NewNotification = {
 
 export async function sendNotificationEmails(notificationIds: string[]) {
   if (notificationIds.length === 0) return
+  const { data: sessionData } = await supabase.auth.getSession()
+  let accessToken = sessionData.session?.access_token
+
+  if (!accessToken) {
+    const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession()
+    if (refreshError) throw refreshError
+    accessToken = refreshData.session?.access_token
+  }
+
+  if (!accessToken) {
+    throw new Error('No hay una sesión activa para enviar emails.')
+  }
+
+  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+  if (!anonKey) {
+    throw new Error('Falta VITE_SUPABASE_ANON_KEY para invocar la función.')
+  }
+
   const { error } = await supabase.functions.invoke('send-notification-email', {
     body: { notificationIds },
+    headers: {
+      apikey: anonKey,
+      Authorization: `Bearer ${accessToken}`,
+    },
   })
   if (error) throw error
 }
