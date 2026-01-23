@@ -2,12 +2,14 @@ import { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard,
+  BarChart3,
   Inbox,
   User,
   Archive,
   Users,
   Building2,
   Tag,
+  Sliders,
   ChevronRight,
   ChevronLeft,
   LogOut,
@@ -39,6 +41,7 @@ export function Sidebar() {
     unreadCount && unreadCount > 99 ? '99+' : unreadCount || 0
 
   const navItems: NavItem[] = [
+    { to: '/manager-dashboard', icon: BarChart3, label: 'Panel Gerencial' },
     { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
     { to: '/inbox', icon: Inbox, label: 'Inbox' },
     { to: '/my-tickets', icon: User, label: 'Mis Tickets' },
@@ -50,6 +53,7 @@ export function Sidebar() {
         { to: '/users', icon: Users, label: 'Usuarios' },
         { to: '/entities', icon: Building2, label: 'Entidades' },
         { to: '/labels', icon: Tag, label: 'Labels' },
+        { to: '/admin/sla', icon: Sliders, label: 'SLA' },
       ]
     : []
 

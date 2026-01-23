@@ -1,6 +1,14 @@
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
-import type { Ticket, Entity, Profile, Comment, TicketStage, TicketPriority, Label, SavedView, SavedViewScope } from '../lib/supabase'
+import type { Ticket, Entity, Profile, Comment, TicketStage, TicketPriority, Label, SavedView, SavedViewScope, SlaPolicy, SlaThreshold, TicketStageHistory, TicketSlaStatus } from '../lib/supabase'
+
+const chunkArray = <T,>(items: T[], size: number) => {
+  const chunks: T[][] = []
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size))
+  }
+  return chunks
+}
 
 // Closed/archived stages to filter out by default
 const CLOSED_STAGES: TicketStage[] = ['done', 'cancelled', 'paused']
@@ -263,6 +271,299 @@ export function useUpdateTicketLabels() {
       queryClient.invalidateQueries({ queryKey: ['tickets'] })
       queryClient.invalidateQueries({ queryKey: ['ticket', variables.ticketId] })
     }
+  })
+}
+
+// SLA Policies
+export function useSlaPolicies() {
+  return useQuery({
+    queryKey: ['sla_policies'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('sla_policies')
+        .select('*')
+        .order('name')
+
+      if (error) throw error
+      return data as SlaPolicy[]
+    }
+  })
+}
+
+export function useCreateSlaPolicy() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (input: { name: string; description?: string | null; is_active?: boolean }) => {
+      const { data, error } = await supabase
+        .from('sla_policies')
+        .insert(input)
+        .select()
+        .single()
+
+      if (error) throw error
+      return data as SlaPolicy
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sla_policies'] })
+    }
+  })
+}
+
+export function useUpdateSlaPolicy() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ id, ...updates }: { id: string; name?: string; description?: string | null; is_active?: boolean }) => {
+      const { data, error } = await supabase
+        .from('sla_policies')
+        .update({ ...updates, updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .select()
+        .single()
+
+      if (error) throw error
+      return data as SlaPolicy
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sla_policies'] })
+      queryClient.invalidateQueries({ queryKey: ['sla_thresholds'] })
+    }
+  })
+}
+
+export function useDeleteSlaPolicy() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('sla_policies')
+        .delete()
+        .eq('id', id)
+
+      if (error) throw error
+      return id
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sla_policies'] })
+      queryClient.invalidateQueries({ queryKey: ['sla_thresholds'] })
+    }
+  })
+}
+
+// SLA Thresholds
+export function useSlaThresholds(policyId?: string) {
+  return useQuery({
+    queryKey: ['sla_thresholds', { policyId }],
+    queryFn: async () => {
+      let query = supabase
+        .from('sla_thresholds')
+        .select('*, policy:sla_policies(*), entity:entities(*)')
+        .order('created_at', { ascending: false })
+
+      if (policyId) {
+        query = query.eq('policy_id', policyId)
+      }
+
+      const { data, error } = await query
+      if (error) throw error
+      return data as SlaThreshold[]
+    }
+  })
+}
+
+export function useCreateSlaThreshold() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (input: {
+      policy_id: string
+      priority?: TicketPriority | null
+      application?: string | null
+      entity_id?: string | null
+      warning_minutes: number
+      breach_minutes: number
+    }) => {
+      const { data, error } = await supabase
+        .from('sla_thresholds')
+        .insert(input)
+        .select('*, policy:sla_policies(*), entity:entities(*)')
+        .single()
+
+      if (error) throw error
+      return data as SlaThreshold
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['sla_thresholds'] })
+      queryClient.invalidateQueries({ queryKey: ['sla_thresholds', { policyId: variables.policy_id }] })
+    }
+  })
+}
+
+export function useUpdateSlaThreshold() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ id, ...updates }: {
+      id: string
+      priority?: TicketPriority | null
+      application?: string | null
+      entity_id?: string | null
+      warning_minutes?: number
+      breach_minutes?: number
+      policy_id?: string
+    }) => {
+      const { data, error } = await supabase
+        .from('sla_thresholds')
+        .update({ ...updates, updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .select('*, policy:sla_policies(*), entity:entities(*)')
+        .single()
+
+      if (error) throw error
+      return data as SlaThreshold
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sla_thresholds'] })
+    }
+  })
+}
+
+export function useDeleteSlaThreshold() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('sla_thresholds')
+        .delete()
+        .eq('id', id)
+
+      if (error) throw error
+      return id
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sla_thresholds'] })
+    }
+  })
+}
+
+// Ticket stage history
+export function useTicketStageHistory(ticketId: string) {
+  return useQuery({
+    queryKey: ['ticket_stage_history', ticketId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('ticket_stage_history')
+        .select('*')
+        .eq('ticket_id', ticketId)
+        .order('started_at', { ascending: true })
+
+      if (error) throw error
+      return data as TicketStageHistory[]
+    },
+    enabled: !!ticketId
+  })
+}
+
+// Ticket SLA status view
+export function useTicketSlaStatus(ticketId: string) {
+  return useQuery({
+    queryKey: ['ticket_sla_status', ticketId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('ticket_sla_status')
+        .select('*')
+        .eq('ticket_id', ticketId)
+        .maybeSingle()
+
+      if (error) throw error
+      return data as TicketSlaStatus | null
+    },
+    enabled: !!ticketId
+  })
+}
+
+export function useTicketSlaStatuses(ticketIds: string[]) {
+  const sortedIds = [...ticketIds].sort()
+  return useQuery({
+    queryKey: ['ticket_sla_statuses', sortedIds],
+    queryFn: async () => {
+      if (sortedIds.length === 0) return []
+      const batches = chunkArray(sortedIds, 200)
+      const allRows: TicketSlaStatus[] = []
+      for (const batch of batches) {
+        const { data, error } = await supabase
+          .from('ticket_sla_status')
+          .select('*')
+          .in('ticket_id', batch)
+
+        if (error) {
+          throw error
+        }
+        if (data?.length) {
+          allRows.push(...data)
+        }
+      }
+      return allRows
+    },
+    enabled: sortedIds.length > 0
+  })
+}
+
+export function useTicketStageHistoryByTicketIds(ticketIds: string[]) {
+  const sortedIds = [...ticketIds].sort()
+  return useQuery({
+    queryKey: ['ticket_stage_history_bulk', sortedIds],
+    queryFn: async () => {
+      if (sortedIds.length === 0) return []
+      const batches = chunkArray(sortedIds, 200)
+      const allRows: TicketStageHistory[] = []
+      for (const batch of batches) {
+        const { data, error } = await supabase
+          .from('ticket_stage_history')
+          .select('*')
+          .in('ticket_id', batch)
+
+        if (error) {
+          throw error
+        }
+        if (data?.length) {
+          allRows.push(...data)
+        }
+      }
+      return allRows
+    },
+    enabled: sortedIds.length > 0
+  })
+}
+
+export function useTicketCommentsSummary(ticketIds: string[]) {
+  const sortedIds = [...ticketIds].sort()
+  return useQuery({
+    queryKey: ['ticket_comments_summary', sortedIds],
+    queryFn: async () => {
+      if (sortedIds.length === 0) return []
+      const batches = chunkArray(sortedIds, 200)
+      const allRows: Array<{ ticket_id: string; user_id: string; created_at: string; is_internal: boolean }> = []
+      for (const batch of batches) {
+        const { data, error } = await supabase
+          .from('comments')
+          .select('ticket_id, user_id, created_at, is_internal')
+          .in('ticket_id', batch)
+          .order('created_at', { ascending: true })
+
+        if (error) {
+          throw error
+        }
+        if (data?.length) {
+          allRows.push(...data)
+        }
+      }
+      return allRows
+    },
+    enabled: sortedIds.length > 0
   })
 }
 

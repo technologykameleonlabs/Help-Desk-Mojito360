@@ -14,6 +14,8 @@ import { CATEGORY_OPTIONS } from '../lib/ticketOptions'
 
 // Updated filters to support multi-select (arrays)
 export type TicketFilters = {
+  dateFrom: string
+  dateTo: string
   reference: string
   externalReference: string
   search: string
@@ -37,6 +39,8 @@ type ConfirmAction =
   | { type: 'update'; name: string }
 
 const DEFAULT_FILTERS: TicketFilters = {
+  dateFrom: '',
+  dateTo: '',
   reference: '',
   externalReference: '',
   search: '',
@@ -50,6 +54,8 @@ const DEFAULT_FILTERS: TicketFilters = {
 }
 
 const normalizeFilters = (input?: Partial<TicketFilters> | null): TicketFilters => ({
+  dateFrom: typeof input?.dateFrom === 'string' ? input.dateFrom : '',
+  dateTo: typeof input?.dateTo === 'string' ? input.dateTo : '',
   reference: typeof input?.reference === 'string' ? input.reference : '',
   externalReference: typeof input?.externalReference === 'string' ? input.externalReference : '',
   search: typeof input?.search === 'string' ? input.search : '',
@@ -111,6 +117,7 @@ export function DashboardPage() {
   
   // Subscribe to realtime ticket updates
   useRealtimeTickets()
+
   
   const handleTicketClick = (ticketId: string) => {
     navigate(`/ticket/${ticketId}`)
@@ -298,6 +305,8 @@ export function DashboardPage() {
 
   // Count active filters (arrays with length > 0)
   const activeFilterCount = 
+    (filters.dateFrom ? 1 : 0) +
+    (filters.dateTo ? 1 : 0) +
     (filters.reference ? 1 : 0) +
     (filters.externalReference ? 1 : 0) +
     (filters.search ? 1 : 0) +
@@ -319,6 +328,7 @@ export function DashboardPage() {
     { value: 'unassigned', label: 'Sin responsable' },
     ...(profiles?.map(p => ({ value: p.id, label: p.full_name || p.email || 'Usuario' })) || [])
   ]
+
 
   // List View Content Component (uses useFilteredTickets)
   function ListViewContent({ 
@@ -645,6 +655,30 @@ export function DashboardPage() {
             {showFilters && (
               <div className="px-6 py-4 bg-[#FAFAFA] border-t border-[#E0E0E1] animate-in slide-in-from-top-2 duration-200 space-y-3">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div className="space-y-1">
+                    <label className="block mb-1.5 text-[10px] uppercase font-bold text-[#8A8F8F] tracking-wider">
+                      Fecha desde
+                    </label>
+                    <input
+                      type="date"
+                      value={filters.dateFrom}
+                      onChange={(e) => updateFilter('dateFrom', e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-[#E0E0E1] rounded-xl text-sm text-[#3F4444] outline-none focus:ring-2 focus:ring-[#6353FF] focus:ring-opacity-30 focus:border-[#6353FF] transition-all"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="block mb-1.5 text-[10px] uppercase font-bold text-[#8A8F8F] tracking-wider">
+                      Fecha hasta
+                    </label>
+                    <input
+                      type="date"
+                      value={filters.dateTo}
+                      onChange={(e) => updateFilter('dateTo', e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-[#E0E0E1] rounded-xl text-sm text-[#3F4444] outline-none focus:ring-2 focus:ring-[#6353FF] focus:ring-opacity-30 focus:border-[#6353FF] transition-all"
+                    />
+                  </div>
+
                   {/* Reference - Number input */}
                   <div className="space-y-1">
                     <label className="block mb-1.5 text-[10px] uppercase font-bold text-[#8A8F8F] tracking-wider">

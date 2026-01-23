@@ -12,6 +12,8 @@ import { UsersPage } from './pages/UsersPage'
 import { EntitiesPage } from './pages/EntitiesPage'
 import { LabelsPage } from './pages/LabelsPage'
 import { NotificationsPage } from './pages/NotificationsPage'
+import { SlaSettingsPage } from './pages/SlaSettingsPage'
+import { ManagerDashboardPage } from './pages/ManagerDashboardPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -63,6 +65,7 @@ function App() {
               <ProtectedRoute>
                 <Routes>
                   {/* Dashboard */}
+                  <Route path="/manager-dashboard" element={<ManagerDashboardPage />} />
                   <Route path="/" element={<DashboardPage />} />
                   <Route path="/ticket/:id" element={<DashboardPage />} />
                   
@@ -92,6 +95,9 @@ function App() {
 
                   {/* Notifications */}
                   <Route path="/notifications" element={<NotificationsPage />} />
+
+                  {/* SLA Settings */}
+                  <Route path="/admin/sla" element={<SlaSettingsPage />} />
                 </Routes>
               </ProtectedRoute>
             }

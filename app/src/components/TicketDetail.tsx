@@ -10,7 +10,9 @@ import {
   useEntities,
   useLabels,
   useUpdateTicketLabels,
-  useCurrentUser
+  useCurrentUser,
+  useTicketStageHistory,
+  useTicketSlaStatus
 } from '../hooks/useData'
 import { sendNotificationEmails, useCreateMentionNotifications, useCreateNotifications } from '../hooks/useNotifications'
 import { useRealtimeComments } from '../hooks/useRealtime'
@@ -82,6 +84,8 @@ export function TicketDetail() {
   const { data: entities } = useEntities()
   const { data: labels } = useLabels()
   const { data: attachments } = useAttachments(id!)
+  const { data: ticketStageHistory } = useTicketStageHistory(id!)
+  const { data: ticketSlaStatus } = useTicketSlaStatus(id!)
   const updateTicket = useUpdateTicket()
   const updateTicketLabels = useUpdateTicketLabels()
   const updateComment = useUpdateComment()
@@ -111,6 +115,7 @@ export function TicketDetail() {
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
   const [awaitingRefresh, setAwaitingRefresh] = useState(false)
   const [pendingSaveMessage, setPendingSaveMessage] = useState<string | null>(null)
+  const [nowTimestamp, setNowTimestamp] = useState(() => Date.now())
 
   const [draft, setDraft] = useState({
     stage: '' as TicketStage,
@@ -151,6 +156,13 @@ export function TicketDetail() {
       }
     }
   }, [awaitingRefresh, updateTicket.isPending, updateTicketLabels.isPending, isFetching, pendingSaveMessage])
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setNowTimestamp(Date.now())
+    }, 60000)
+    return () => clearInterval(interval)
+  }, [])
 
   // Track mentions as user types
   const handleMention = useCallback((userId: string) => {
@@ -292,6 +304,62 @@ export function TicketDetail() {
     const selectedSet = new Set(selectedLabelIds)
     return labels.filter(label => selectedSet.has(label.id))
   }, [labels, selectedLabelIds])
+
+  const slaBadge = useMemo(() => {
+    const status = ticketSlaStatus?.sla_status
+    if (status === 'A tiempo') {
+      return { label: status, className: 'bg-emerald-50 text-emerald-700 border-emerald-200' }
+    }
+    if (status === 'En riesgo') {
+      return { label: status, className: 'bg-amber-50 text-amber-700 border-amber-200' }
+    }
+    if (status === 'Atrasado') {
+      return { label: status, className: 'bg-red-50 text-red-600 border-red-200' }
+    }
+    return { label: 'Sin SLA', className: 'bg-[#F7F7F8] text-[#5A5F5F] border-[#E0E0E1]' }
+  }, [ticketSlaStatus?.sla_status])
+
+  const formatDuration = useCallback((totalSeconds: number) => {
+    const safeSeconds = Math.max(0, Math.floor(totalSeconds))
+    const totalMinutes = Math.floor(safeSeconds / 60)
+    const hours = Math.floor(totalMinutes / 60)
+    const minutes = totalMinutes % 60
+    if (hours > 0) return `${hours}h ${minutes}m`
+    return `${minutes}m`
+  }, [])
+
+  const stageStats = useMemo(() => {
+    if (!ticketStageHistory || ticketStageHistory.length === 0) {
+      return {
+        items: [] as Array<{ stage: TicketStage; seconds: number }>,
+        totalActiveSeconds: 0,
+        totalPausedSeconds: 0,
+      }
+    }
+
+    const totals = new Map<TicketStage, number>()
+    let totalActiveSeconds = 0
+    let totalPausedSeconds = 0
+    const now = new Date(nowTimestamp)
+
+    ticketStageHistory.forEach(entry => {
+      const startedAt = new Date(entry.started_at)
+      const endedAt = entry.ended_at ? new Date(entry.ended_at) : now
+      const durationSeconds = entry.duration_seconds ?? Math.max(0, Math.floor((endedAt.getTime() - startedAt.getTime()) / 1000))
+      totals.set(entry.stage, (totals.get(entry.stage) || 0) + durationSeconds)
+      if (entry.is_paused) {
+        totalPausedSeconds += durationSeconds
+      } else {
+        totalActiveSeconds += durationSeconds
+      }
+    })
+
+    const items = Array.from(totals.entries())
+      .map(([stage, seconds]) => ({ stage, seconds }))
+      .sort((a, b) => b.seconds - a.seconds)
+
+    return { items, totalActiveSeconds, totalPausedSeconds }
+  }, [ticketStageHistory, nowTimestamp])
 
   const isClient = currentUser?.role === 'client'
   const isSupportUser = !isClient
@@ -594,6 +662,23 @@ export function TicketDetail() {
                 </div>
 
                 <div className="flex items-start text-sm gap-3">
+                  <Clock className="w-4 h-4 text-[#8A8F8F] mt-0.5" />
+                  <div className="flex-1">
+                    <span className="text-[#8A8F8F] block">Estado SLA</span>
+                    <span className={`inline-flex items-center px-2 py-1 mt-1 rounded-lg text-[11px] font-semibold border ${slaBadge.className}`}>
+                      {slaBadge.label}
+                    </span>
+                    {ticketSlaStatus?.elapsed_minutes !== undefined ? (
+                      <div className="text-[11px] text-[#8A8F8F] mt-1">
+                        {ticketSlaStatus.elapsed_minutes} min transcurridos
+                      </div>
+                    ) : (
+                      <div className="text-[11px] text-[#8A8F8F] mt-1">Sin reglas aplicables</div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-start text-sm gap-3">
                   <Building2 className="w-4 h-4 text-[#8A8F8F] mt-0.5" />
                   <div className="flex-1">
                     <span className="text-[#8A8F8F] block">Entidad</span>
@@ -852,8 +937,36 @@ export function TicketDetail() {
 
           {/* Timings */}
           <div className="space-y-2">
-            <h3 className="text-xs font-bold text-[#8A8F8F] uppercase tracking-widest">Timings</h3>
-            <div className="text-sm text-[#8A8F8F]">Por desarrollar</div>
+            <h3 className="text-xs font-bold text-[#8A8F8F] uppercase tracking-widest">Estadísticas</h3>
+            {stageStats.items.length === 0 ? (
+              <div className="text-sm text-[#8A8F8F]">Sin datos de tiempo todavía.</div>
+            ) : (
+              <div className="space-y-3 text-sm text-[#3F4444]">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-[#F7F7F8] border border-[#E0E0E1] rounded-xl px-3 py-2">
+                    <div className="text-[11px] text-[#8A8F8F] uppercase tracking-wider">Tiempo activo</div>
+                    <div className="font-semibold">{formatDuration(stageStats.totalActiveSeconds)}</div>
+                  </div>
+                  <div className="bg-[#F7F7F8] border border-[#E0E0E1] rounded-xl px-3 py-2">
+                    <div className="text-[11px] text-[#8A8F8F] uppercase tracking-wider">Tiempo pausado</div>
+                    <div className="font-semibold">{formatDuration(stageStats.totalPausedSeconds)}</div>
+                  </div>
+                </div>
+                <div className="border border-[#E0E0E1] rounded-xl overflow-hidden">
+                  <div className="px-3 py-2 bg-[#FAFAFA] text-[11px] text-[#8A8F8F] uppercase tracking-wider font-semibold">
+                    Desglose por estado
+                  </div>
+                  <div className="divide-y divide-[#E0E0E1]">
+                    {stageStats.items.map(item => (
+                      <div key={item.stage} className="flex items-center justify-between px-3 py-2">
+                        <span className="text-[#5A5F5F]">{STAGES[item.stage].label}</span>
+                        <span className="font-semibold">{formatDuration(item.seconds)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Solution (if any) */}

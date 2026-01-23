@@ -176,6 +176,18 @@ export function KanbanBoard({ onTicketClick, filters }: KanbanBoardProps) {
     if (!tickets) return []
     
     return tickets.filter(ticket => {
+      if (filters.dateFrom || filters.dateTo) {
+        const ticketDate = new Date(ticket.created_at).getTime()
+        if (filters.dateFrom) {
+          const start = new Date(`${filters.dateFrom}T00:00:00`).getTime()
+          if (ticketDate < start) return false
+        }
+        if (filters.dateTo) {
+          const end = new Date(`${filters.dateTo}T23:59:59`).getTime()
+          if (ticketDate > end) return false
+        }
+      }
+
       // Reference filter (ticket_ref)
       if (filters.reference) {
         const ref = filters.reference.trim()
@@ -340,6 +352,8 @@ export function KanbanBoard({ onTicketClick, filters }: KanbanBoardProps) {
   
   // Check if any filters are active (array-based)
   const hasActiveFilters = filters.reference ||
+    filters.dateFrom ||
+    filters.dateTo ||
     filters.externalReference ||
     filters.search || 
     filters.priority.length > 0 || 

@@ -95,6 +95,55 @@ export type Label = {
   created_at?: string
 }
 
+export type SlaPolicy = {
+  id: string
+  name: string
+  description: string | null
+  is_active: boolean
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type SlaThreshold = {
+  id: string
+  policy_id: string
+  priority: TicketPriority | null
+  application: string | null
+  entity_id: string | null
+  warning_minutes: number
+  breach_minutes: number
+  created_at: string
+  updated_at: string
+  policy?: SlaPolicy
+  entity?: Entity
+}
+
+export type TicketStageHistory = {
+  id: string
+  ticket_id: string
+  stage: TicketStage
+  started_at: string
+  ended_at: string | null
+  duration_seconds: number | null
+  is_paused: boolean
+  created_at: string
+}
+
+export type TicketSlaStatus = {
+  ticket_id: string
+  created_at: string
+  priority: TicketPriority
+  application: string | null
+  entity_id: string | null
+  threshold_id: string | null
+  policy_id: string | null
+  warning_minutes: number | null
+  breach_minutes: number | null
+  elapsed_minutes: number
+  sla_status: 'A tiempo' | 'En riesgo' | 'Atrasado' | null
+}
+
 export type Comment = {
   id: string
   ticket_id: string

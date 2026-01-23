@@ -7,13 +7,25 @@ import type { TicketFilters } from '../pages/DashboardPage'
  * Hook that returns filtered tickets based on the provided filters.
  * Supports multi-select (array) filters.
  */
-export function useFilteredTickets(filters: TicketFilters) {
-  const { data: tickets, isLoading, error } = useTickets()
+export function useFilteredTickets(filters: TicketFilters, includeArchived: boolean = false) {
+  const { data: tickets, isLoading, error } = useTickets(includeArchived)
   
   const filteredTickets = useMemo(() => {
     if (!tickets) return []
     
     return tickets.filter(ticket => {
+      if (filters.dateFrom || filters.dateTo) {
+        const ticketDate = new Date(ticket.created_at).getTime()
+        if (filters.dateFrom) {
+          const start = new Date(`${filters.dateFrom}T00:00:00`).getTime()
+          if (ticketDate < start) return false
+        }
+        if (filters.dateTo) {
+          const end = new Date(`${filters.dateTo}T23:59:59`).getTime()
+          if (ticketDate > end) return false
+        }
+      }
+
       // Reference filter (ticket_ref)
       if (filters.reference) {
         const ref = filters.reference.trim()
