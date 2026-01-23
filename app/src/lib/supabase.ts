@@ -20,7 +20,7 @@ export type Profile = {
   id: string
   full_name: string | null
   avatar_url: string | null
-  role: 'admin' | 'agent' | 'dev'
+  role: 'admin' | 'agent' | 'dev' | 'client'
   email: string | null
   is_active: boolean
   created_at: string
@@ -58,7 +58,9 @@ export type TicketPriority = 'low' | 'medium' | 'high' | 'critical'
 export type Ticket = {
   id: string
   ticket_ref: number
-  mojito_ref: number | null
+  external_ref: string | null
+  external_source: string | null
+  external_url: string | null
   title: string
   description: string | null
   stage: TicketStage
@@ -66,6 +68,7 @@ export type Ticket = {
   assigned_to: string | null
   created_by: string | null
   entity_id: string | null
+  category: string | null
   application: string | null
   classification: string | null
   channel: string | null
@@ -82,6 +85,14 @@ export type Ticket = {
   assigned_to_profile?: Profile
   created_by_profile?: Profile
   entity?: Entity
+  labels?: { label: Label }[]
+}
+
+export type Label = {
+  id: string
+  name: string
+  color: string
+  created_at?: string
 }
 
 export type Comment = {
@@ -91,6 +102,11 @@ export type Comment = {
   content: string
   is_internal: boolean
   created_at: string
+  edited_at?: string | null
+  edited_by?: string | null
+  is_deleted?: boolean | null
+  deleted_at?: string | null
+  deleted_by?: string | null
   // Relations
   user?: Profile
 }

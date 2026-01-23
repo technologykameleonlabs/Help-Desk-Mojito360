@@ -10,6 +10,7 @@ import { MyTicketsPage } from './pages/MyTicketsPage'
 import { ArchivePage } from './pages/ArchivePage'
 import { UsersPage } from './pages/UsersPage'
 import { EntitiesPage } from './pages/EntitiesPage'
+import { LabelsPage } from './pages/LabelsPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -84,6 +85,9 @@ function App() {
 
                   {/* Entities */}
                   <Route path="/entities" element={<EntitiesPage />} />
+
+                  {/* Labels */}
+                  <Route path="/labels" element={<LabelsPage />} />
                 </Routes>
               </ProtectedRoute>
             }

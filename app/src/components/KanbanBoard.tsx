@@ -184,11 +184,11 @@ export function KanbanBoard({ onTicketClick, filters }: KanbanBoardProps) {
         }
       }
 
-      // Mojito reference filter (mojito_ref)
-      if (filters.mojitoReference) {
-        const ref = filters.mojitoReference.trim()
-        const mojitoValue = ticket.mojito_ref?.toString() || ''
-        if (ref && !mojitoValue.includes(ref)) {
+      // External reference filter (external_ref)
+      if (filters.externalReference) {
+        const ref = filters.externalReference.trim()
+        const externalValue = ticket.external_ref || ''
+        if (ref && !externalValue.includes(ref)) {
           return false
         }
       }
@@ -222,6 +222,13 @@ export function KanbanBoard({ onTicketClick, filters }: KanbanBoardProps) {
       // Application filter (multi-select)
       if (filters.application.length > 0) {
         if (!ticket.application || !filters.application.includes(ticket.application)) {
+          return false
+        }
+      }
+
+      // Category filter (multi-select)
+      if (filters.category.length > 0) {
+        if (!ticket.category || !filters.category.includes(ticket.category)) {
           return false
         }
       }
@@ -333,12 +340,13 @@ export function KanbanBoard({ onTicketClick, filters }: KanbanBoardProps) {
   
   // Check if any filters are active (array-based)
   const hasActiveFilters = filters.reference ||
-    filters.mojitoReference ||
+    filters.externalReference ||
     filters.search || 
     filters.priority.length > 0 || 
     filters.stage.length > 0 || 
     filters.entity.length > 0 || 
     filters.application.length > 0 || 
+    filters.category.length > 0 ||
     filters.assignedTo.length > 0 ||
     filters.responsible.length > 0
   

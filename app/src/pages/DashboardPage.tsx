@@ -10,16 +10,18 @@ import { useRealtimeTickets } from '../hooks/useRealtime'
 import { useFilteredTickets } from '../hooks/useFilteredTickets'
 import { useEntities, useProfiles } from '../hooks/useData'
 import { STAGES, PRIORITIES } from '../lib/supabase'
+import { CATEGORY_OPTIONS } from '../lib/ticketOptions'
 
 // Updated filters to support multi-select (arrays)
 export type TicketFilters = {
   reference: string
-  mojitoReference: string
+  externalReference: string
   search: string
   priority: string[]  // Changed to array
   stage: string[]     // Changed to array
   entity: string[]    // Changed to array
   application: string[]
+  category: string[]
   assignedTo: string[]
   responsible: string[]
 }
@@ -41,6 +43,10 @@ const PRIORITY_OPTIONS = Object.entries(PRIORITIES).map(([key, value]) => ({
 }))
 
 const APPLICATION_OPTIONS = APPLICATIONS.map(app => ({ value: app, label: app }))
+const CATEGORY_FILTER_OPTIONS = CATEGORY_OPTIONS.map(option => ({
+  value: option.value,
+  label: `${option.icon} ${option.label}`,
+}))
 
 export function DashboardPage() {
   const navigate = useNavigate()
@@ -50,12 +56,13 @@ export function DashboardPage() {
   
   const [filters, setFilters] = useState<TicketFilters>({
     reference: '',
-    mojitoReference: '',
+    externalReference: '',
     search: '',
     priority: [],
     stage: [],
     entity: [],
     application: [],
+    category: [],
     assignedTo: [],
     responsible: []
   })
@@ -77,12 +84,13 @@ export function DashboardPage() {
   const clearFilters = () => {
     setFilters({
       reference: '',
-      mojitoReference: '',
+      externalReference: '',
       search: '',
       priority: [],
       stage: [],
       entity: [],
       application: [],
+      category: [],
       assignedTo: [],
       responsible: []
     })
@@ -91,12 +99,13 @@ export function DashboardPage() {
   // Count active filters (arrays with length > 0)
   const activeFilterCount = 
     (filters.reference ? 1 : 0) +
-    (filters.mojitoReference ? 1 : 0) +
+    (filters.externalReference ? 1 : 0) +
     (filters.search ? 1 : 0) +
     filters.priority.length +
     filters.stage.length +
     filters.entity.length +
     filters.application.length +
+    filters.category.length +
     filters.assignedTo.length +
     filters.responsible.length
 
@@ -244,17 +253,17 @@ export function DashboardPage() {
                     />
                   </div>
 
-                  {/* Mojito Reference - Number input */}
+                  {/* External Reference - Number input */}
                   <div className="space-y-1">
                     <label className="block mb-1.5 text-[10px] uppercase font-bold text-[#8A8F8F] tracking-wider">
-                      Referencia Mojito
+                      Referencia externa
                     </label>
                     <input
                       type="number"
                       inputMode="numeric"
                       placeholder="Ej: 123"
-                      value={filters.mojitoReference}
-                      onChange={(e) => updateFilter('mojitoReference', e.target.value)}
+                      value={filters.externalReference}
+                      onChange={(e) => updateFilter('externalReference', e.target.value)}
                       className="w-full px-3 py-2 bg-white border border-[#E0E0E1] rounded-xl text-sm text-[#3F4444] placeholder:text-[#B0B5B5] outline-none focus:ring-2 focus:ring-[#6353FF] focus:ring-opacity-30 focus:border-[#6353FF] transition-all"
                     />
                   </div>
@@ -294,6 +303,15 @@ export function DashboardPage() {
                     options={APPLICATION_OPTIONS}
                     value={filters.application}
                     onChange={(v) => updateFilter('application', v)}
+                    placeholder="Todas"
+                  />
+
+                  {/* Category - Multi-select */}
+                  <MultiSelect
+                    label="Categoría"
+                    options={CATEGORY_FILTER_OPTIONS}
+                    value={filters.category}
+                    onChange={(v) => updateFilter('category', v)}
                     placeholder="Todas"
                   />
 

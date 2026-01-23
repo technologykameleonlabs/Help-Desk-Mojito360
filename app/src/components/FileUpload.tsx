@@ -3,6 +3,7 @@ import { Paperclip, FileText, Image, Loader2, Download, Trash2 } from 'lucide-re
 
 import { supabase } from '../lib/supabase'
 import { clsx } from 'clsx'
+import { ConfirmModal } from './ConfirmModal'
 
 export type Attachment = {
   id: string
@@ -67,7 +68,7 @@ export function FileUpload({ ticketId, commentId, onUploadComplete, compact = fa
 
       // Upload to Supabase Storage
       const { error: uploadError } = await supabase.storage
-        .from('files')
+        .from('ticket-attachments')
         .upload(storagePath, file)
 
 
@@ -143,17 +144,21 @@ export function FileUpload({ ticketId, commentId, onUploadComplete, compact = fa
 type AttachmentListProps = {
   attachments: Attachment[]
   onDelete?: (id: string) => void
-  canDelete?: boolean
+  canDelete?: boolean | ((attachment: Attachment) => boolean)
 }
 
 export function AttachmentList({ attachments, onDelete, canDelete = false }: AttachmentListProps) {
   const [downloading, setDownloading] = useState<string | null>(null)
+  const [confirmAction, setConfirmAction] = useState<{
+    type: 'download' | 'delete'
+    attachment: Attachment
+  } | null>(null)
 
   const handleDownload = async (attachment: Attachment) => {
     setDownloading(attachment.id)
     try {
       const { data, error } = await supabase.storage
-        .from('files')
+        .from('ticket-attachments')
         .download(attachment.storage_path)
 
 
@@ -175,6 +180,19 @@ export function AttachmentList({ attachments, onDelete, canDelete = false }: Att
     }
   }
 
+  const handleConfirm = async () => {
+    if (!confirmAction) return
+    const { type, attachment } = confirmAction
+    setConfirmAction(null)
+    if (type === 'download') {
+      await handleDownload(attachment)
+      return
+    }
+    if (type === 'delete' && onDelete) {
+      onDelete(attachment.id)
+    }
+  }
+
   if (attachments.length === 0) return null
 
   return (
@@ -182,6 +200,7 @@ export function AttachmentList({ attachments, onDelete, canDelete = false }: Att
       {attachments.map(attachment => {
         const FileIcon = getFileIcon(attachment.file_type)
         const isImage = attachment.file_type.startsWith('image/')
+        const allowDelete = typeof canDelete === 'function' ? canDelete(attachment) : canDelete
 
         return (
           <div 
@@ -202,7 +221,7 @@ export function AttachmentList({ attachments, onDelete, canDelete = false }: Att
 
             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
               <button
-                onClick={() => handleDownload(attachment)}
+                onClick={() => setConfirmAction({ type: 'download', attachment })}
                 disabled={downloading === attachment.id}
                 className="p-1.5 hover:bg-white rounded transition-colors text-[#8A8F8F] hover:text-[#6353FF]"
                 title="Descargar"
@@ -214,9 +233,9 @@ export function AttachmentList({ attachments, onDelete, canDelete = false }: Att
                 )}
               </button>
               
-              {canDelete && onDelete && (
+              {allowDelete && onDelete && (
                 <button
-                  onClick={() => onDelete(attachment.id)}
+                  onClick={() => setConfirmAction({ type: 'delete', attachment })}
                   className="p-1.5 hover:bg-red-50 rounded transition-colors text-[#8A8F8F] hover:text-red-500"
                   title="Eliminar"
                 >
@@ -227,6 +246,24 @@ export function AttachmentList({ attachments, onDelete, canDelete = false }: Att
           </div>
         )
       })}
+
+      <ConfirmModal
+        open={!!confirmAction}
+        title={
+          confirmAction?.type === 'delete'
+            ? 'Eliminar adjunto'
+            : 'Descargar adjunto'
+        }
+        description={
+          confirmAction
+            ? `¿Deseas ${confirmAction.type === 'delete' ? 'eliminar' : 'descargar'} "${confirmAction.attachment.file_name}"?`
+            : undefined
+        }
+        confirmText={confirmAction?.type === 'delete' ? 'Eliminar' : 'Descargar'}
+        onConfirm={handleConfirm}
+        onCancel={() => setConfirmAction(null)}
+        isConfirming={confirmAction?.type === 'download' && !!downloading}
+      />
     </div>
   )
 }

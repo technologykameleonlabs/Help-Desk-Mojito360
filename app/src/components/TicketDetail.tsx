@@ -4,14 +4,20 @@ import {
   useUpdateTicket, 
   useComments, 
   useCreateComment,
+  useUpdateComment,
+  useDeleteComment,
   useProfiles,
   useEntities,
   useLabels,
-  useUpdateTicketLabels
+  useUpdateTicketLabels,
+  useCurrentUser
 } from '../hooks/useData'
 import { useCreateMentionNotifications } from '../hooks/useNotifications'
 import { useRealtimeComments } from '../hooks/useRealtime'
 import { MentionTextarea, extractMentions } from './MentionTextarea'
+import { useAttachments, useDeleteAttachment } from '../hooks/useAttachments'
+import { AttachmentList } from './FileUpload'
+import { supabase } from '../lib/supabase'
 
 import { 
   X, 
@@ -31,12 +37,13 @@ import {
   Paperclip
 } from 'lucide-react'
 import { STAGES, PRIORITIES, type TicketStage, type TicketPriority, type Ticket } from '../lib/supabase'
-import { useState, useCallback, useMemo, useEffect } from 'react'
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { clsx } from 'clsx'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { MultiSelect } from './MultiSelect'
 import { getCategoryOption } from '../lib/ticketOptions'
+import { useQueryClient } from '@tanstack/react-query'
 
 const TICKET_TYPES = [
   '🔔 Alertas', '🔼 Carga', '💽 Dato', '📝 Documentos', 
@@ -45,6 +52,20 @@ const TICKET_TYPES = [
 ]
 
 const APPLICATION_OPTIONS = ['Mojito360', 'Wintruck', 'Odoo', 'Otros']
+const MAX_FILE_SIZE = 10 * 1024 * 1024
+const ALLOWED_MIME_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'text/plain',
+  'text/csv',
+])
 
 type EditableField = 'stage' | 'priority' | 'entity_id' | 'assigned_to' | 'ticket_type' | 'application' | 'labels'
 
@@ -52,13 +73,19 @@ export function TicketDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const location = useLocation()
+  const queryClient = useQueryClient()
   const { data: ticket, isLoading, error, isFetching } = useTicket(id!)
   const { data: comments } = useComments(id!)
+  const { data: currentUser } = useCurrentUser()
   const { data: profiles } = useProfiles()
   const { data: entities } = useEntities()
   const { data: labels } = useLabels()
+  const { data: attachments } = useAttachments(id!)
   const updateTicket = useUpdateTicket()
   const updateTicketLabels = useUpdateTicketLabels()
+  const updateComment = useUpdateComment()
+  const deleteComment = useDeleteComment()
+  const deleteAttachment = useDeleteAttachment()
 
   // Subscribe to realtime comment updates
   useRealtimeComments(id!)
@@ -71,6 +98,13 @@ export function TicketDetail() {
   const [mentionedUserIds, setMentionedUserIds] = useState<string[]>([])
   const [isChatOpen, setIsChatOpen] = useState(false)
   const [selectedLabelIds, setSelectedLabelIds] = useState<string[]>([])
+  const [pendingCommentFiles, setPendingCommentFiles] = useState<File[]>([])
+  const [commentUploadError, setCommentUploadError] = useState<string | null>(null)
+  const [commentUploading, setCommentUploading] = useState(false)
+  const [isAttachmentModalOpen, setIsAttachmentModalOpen] = useState(false)
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null)
+  const [editingCommentText, setEditingCommentText] = useState('')
+  const commentFileInputRef = useRef<HTMLInputElement>(null)
   const [editingFields, setEditingFields] = useState<Set<EditableField>>(new Set())
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
   const [awaitingRefresh, setAwaitingRefresh] = useState(false)
@@ -122,6 +156,83 @@ export function TicketDetail() {
       prev.includes(userId) ? prev : [...prev, userId]
     )
   }, [])
+
+  const handleCommentFilesChange = (files: FileList | null) => {
+    if (!files) return
+    const nextFiles: File[] = []
+    let errorMessage: string | null = null
+
+    Array.from(files).forEach((file) => {
+      if (file.size > MAX_FILE_SIZE) {
+        errorMessage = 'El archivo supera 10MB.'
+        return
+      }
+      if (file.type && !ALLOWED_MIME_TYPES.has(file.type)) {
+        errorMessage = 'Tipo de archivo no permitido.'
+        return
+      }
+      nextFiles.push(file)
+    })
+
+    if (errorMessage) {
+      setCommentUploadError(errorMessage)
+      return
+    }
+
+    setCommentUploadError(null)
+    setPendingCommentFiles(prev => [...prev, ...nextFiles])
+  }
+
+  const removePendingCommentFile = (index: number) => {
+    setPendingCommentFiles(prev => prev.filter((_, i) => i !== index))
+  }
+
+  const uploadCommentAttachments = async (commentId: string) => {
+    if (pendingCommentFiles.length === 0) return
+
+    setCommentUploading(true)
+    setCommentUploadError(null)
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('No autenticado')
+
+      for (const file of pendingCommentFiles) {
+        const timestamp = Date.now()
+        const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_')
+        const storagePath = `${user.id}/${ticket.id}/${timestamp}_${safeName}`
+
+        const { error: uploadError } = await supabase.storage
+          .from('ticket-attachments')
+          .upload(storagePath, file)
+
+        if (uploadError) throw uploadError
+
+        const { error: dbError } = await supabase
+          .from('attachments')
+          .insert({
+            ticket_id: ticket.id,
+            comment_id: commentId,
+            uploaded_by: user.id,
+            file_name: file.name,
+            file_size: file.size,
+            file_type: file.type,
+            storage_path: storagePath
+          })
+
+        if (dbError) throw dbError
+      }
+
+      setPendingCommentFiles([])
+      await queryClient.invalidateQueries({ queryKey: ['attachments', ticket.id] })
+      await queryClient.refetchQueries({ queryKey: ['attachments', ticket.id] })
+    } catch (err: any) {
+      console.error('Upload error:', err)
+      setCommentUploadError(err.message || 'Error al subir archivos')
+    } finally {
+      setCommentUploading(false)
+    }
+  }
 
   const labelsChanged = useMemo(() => {
     const current = ticket?.labels?.map(item => item.label.id) || []
@@ -176,6 +287,16 @@ export function TicketDetail() {
     return labels.filter(label => selectedSet.has(label.id))
   }, [labels, selectedLabelIds])
 
+  const isClient = currentUser?.role === 'client'
+  const isSupportUser = !isClient
+  const ticketAttachments = useMemo(() => {
+    return attachments?.filter(item => !item.comment_id) || []
+  }, [attachments])
+  const visibleComments = useMemo(() => {
+    if (!comments) return []
+    return isClient ? comments.filter(comment => !comment.is_internal) : comments
+  }, [comments, isClient])
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full w-[600px] bg-white border-l border-[#E0E0E1]">
@@ -205,7 +326,7 @@ export function TicketDetail() {
       const result = await createComment.mutateAsync({
         ticketId: ticket.id,
         content: commentText,
-        isInternal
+        isInternal: currentUser?.role === 'client' ? false : isInternal
       })
 
       // Extract all mentioned users from the text
@@ -222,11 +343,55 @@ export function TicketDetail() {
         })
       }
 
+      if (result?.id) {
+        await uploadCommentAttachments(result.id)
+      }
+
       setCommentText('')
       setMentionedUserIds([])
+      setIsInternal(false)
+      setIsAttachmentModalOpen(false)
     } catch (e) {
       console.error(e)
     }
+  }
+
+  const startEditComment = (commentId: string, content: string) => {
+    setEditingCommentId(commentId)
+    setEditingCommentText(content)
+  }
+
+  const cancelEditComment = () => {
+    setEditingCommentId(null)
+    setEditingCommentText('')
+  }
+
+  const saveEditComment = async (commentId: string) => {
+    if (!editingCommentText.trim()) return
+    try {
+      await updateComment.mutateAsync({ commentId, content: editingCommentText.trim() })
+      cancelEditComment()
+    } catch (e) {
+      console.error(e)
+      alert('No se pudo editar el mensaje.')
+    }
+  }
+
+  const handleDeleteComment = async (commentId: string) => {
+    const confirmDelete = window.confirm('¿Eliminar este mensaje?')
+    if (!confirmDelete) return
+    try {
+      await deleteComment.mutateAsync({ commentId })
+    } catch (e) {
+      console.error(e)
+      alert('No se pudo eliminar el mensaje.')
+    }
+  }
+
+  const handleDeleteAttachment = (attachmentId: string) => {
+    const attachment = attachments?.find(item => item.id === attachmentId)
+    if (!attachment) return
+    deleteAttachment.mutate({ id: attachment.id, storagePath: attachment.storage_path })
   }
 
   const handleApplyChanges = async () => {
@@ -640,6 +805,20 @@ export function TicketDetail() {
             </div>
           </div>
 
+          {/* Attachments */}
+          <div className="space-y-2">
+            <h3 className="text-xs font-bold text-[#8A8F8F] uppercase tracking-widest">Adjuntos</h3>
+            {ticketAttachments.length > 0 ? (
+              <AttachmentList
+                attachments={ticketAttachments}
+                onDelete={handleDeleteAttachment}
+                canDelete={(attachment) => attachment.uploaded_by === currentUser?.id}
+              />
+            ) : (
+              <div className="text-sm text-[#8A8F8F]">Sin adjuntos.</div>
+            )}
+          </div>
+
           {/* Timings */}
           <div className="space-y-2">
             <h3 className="text-xs font-bold text-[#8A8F8F] uppercase tracking-widest">Timings</h3>
@@ -667,7 +846,7 @@ export function TicketDetail() {
             <div className="flex items-center gap-2">
               <MessageSquare className="w-4 h-4 text-[#8A8F8F]" />
               <span className="text-xs font-bold text-[#8A8F8F] uppercase tracking-widest">
-                Mensajes ({comments?.length || 0})
+                Mensajes ({visibleComments.length})
               </span>
             </div>
             <ChevronUp className="w-4 h-4 text-[#8A8F8F]" />
@@ -679,7 +858,7 @@ export function TicketDetail() {
             <div className="flex items-center gap-2">
               <MessageSquare className="w-4 h-4 text-[#8A8F8F]" />
               <h3 className="text-xs font-bold text-[#8A8F8F] uppercase tracking-widest">
-                Mensajes ({comments?.length || 0})
+                Mensajes ({visibleComments.length})
               </h3>
             </div>
             <button
@@ -693,8 +872,8 @@ export function TicketDetail() {
           </div>
 
           <div className="flex-1 overflow-auto p-6 space-y-4">
-            {comments?.length ? (
-              comments.map((comment) => (
+            {visibleComments.length ? (
+              visibleComments.map((comment) => (
                 <div 
                   key={comment.id} 
                   className={clsx(
@@ -703,14 +882,79 @@ export function TicketDetail() {
                   )}
                 >
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-[#5A5F5F] font-medium text-xs">
-                      {comment.user?.full_name || 'Usuario'}
-                    </span>
-                    <span className="text-[#B0B5B5] text-[10px]">
-                      {format(new Date(comment.created_at), 'HH:mm')}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[#5A5F5F] font-medium text-xs">
+                        {comment.user?.full_name || 'Usuario'}
+                      </span>
+                      {comment.edited_at && !comment.is_deleted && (
+                        <span className="text-[10px] text-[#8A8F8F]">
+                          (Editado {format(new Date(comment.edited_at), 'dd/MM HH:mm')})
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[#B0B5B5] text-[10px]">
+                        {format(new Date(comment.created_at), 'HH:mm')}
+                      </span>
+                      {isSupportUser && currentUser?.id === comment.user_id && !comment.is_deleted && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => startEditComment(comment.id, comment.content)}
+                            className="text-[10px] text-[#8A8F8F] hover:text-[#3F4444]"
+                          >
+                            Editar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteComment(comment.id)}
+                            className="text-[10px] text-[#8A8F8F] hover:text-red-500"
+                          >
+                            Eliminar
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
-                  <p className="text-[#3F4444]">{comment.content}</p>
+                  {comment.is_deleted ? (
+                    <p className="text-[#8A8F8F] italic">Mensaje eliminado</p>
+                  ) : editingCommentId === comment.id ? (
+                    <div className="space-y-2">
+                      <textarea
+                        value={editingCommentText}
+                        onChange={(e) => setEditingCommentText(e.target.value)}
+                        className="w-full bg-white border border-[#E0E0E1] rounded-xl px-3 py-2 text-sm text-[#3F4444] outline-none focus:border-[#6353FF] transition-all resize-none min-h-[80px]"
+                      />
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={cancelEditComment}
+                          className="px-3 py-1.5 text-xs font-medium text-[#8A8F8F] hover:text-[#3F4444] hover:bg-[#ECECED] rounded-lg transition-colors"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => saveEditComment(comment.id)}
+                          className="px-3 py-1.5 text-xs font-semibold bg-[#6353FF] hover:bg-[#5244e6] text-white rounded-lg transition-colors"
+                        >
+                          Guardar
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-[#3F4444]">{comment.content}</p>
+                  )}
+
+                  {!comment.is_deleted && attachments && attachments.some(item => item.comment_id === comment.id) && (
+                    <div className="mt-2">
+                      <AttachmentList
+                        attachments={attachments.filter(item => item.comment_id === comment.id)}
+                        onDelete={handleDeleteAttachment}
+                        canDelete={(attachment) => attachment.uploaded_by === currentUser?.id}
+                      />
+                    </div>
+                  )}
                 </div>
               ))
             ) : (
@@ -730,7 +974,7 @@ export function TicketDetail() {
                 />
                 <button
                   type="submit"
-                  disabled={createComment.isPending || !commentText.trim()}
+                  disabled={createComment.isPending || commentUploading || !commentText.trim()}
                   className="absolute bottom-3 right-3 p-2 bg-[#6353FF] hover:bg-[#5244e6] text-white rounded-full transition-all disabled:opacity-50"
                 >
                   {createComment.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
@@ -739,26 +983,110 @@ export function TicketDetail() {
               <div className="flex items-center justify-between gap-2">
                 <button
                   type="button"
+                  onClick={() => setIsAttachmentModalOpen(true)}
                   className="inline-flex items-center gap-2 px-3 py-2 text-xs font-medium text-[#8A8F8F] hover:text-[#3F4444] hover:bg-[#F7F7F8] rounded-xl transition-colors"
                 >
                   <Paperclip className="w-4 h-4" />
-                  Adjuntar
+                  Adjuntar{pendingCommentFiles.length > 0 ? ` (${pendingCommentFiles.length})` : ''}
                 </button>
-                <div className="flex items-center gap-2">
-                  <input 
-                    type="checkbox" 
-                    id="internal" 
-                    checked={isInternal}
-                    onChange={(e) => setIsInternal(e.target.checked)}
-                    className="rounded border-[#E0E0E1] bg-white text-[#6353FF] focus:ring-0" 
-                  />
-                  <label htmlFor="internal" className="text-xs text-[#8A8F8F] cursor-pointer select-none">
-                    Comentario interno (Símbolo 🔒)
-                  </label>
-                </div>
+                {commentUploading && (
+                  <div className="flex items-center gap-2 text-xs text-[#8A8F8F]">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    Subiendo adjuntos...
+                  </div>
+                )}
+                {!isClient && (
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="checkbox" 
+                      id="internal" 
+                      checked={isInternal}
+                      onChange={(e) => setIsInternal(e.target.checked)}
+                      className="rounded border-[#E0E0E1] bg-white text-[#6353FF] focus:ring-0"
+                    />
+                    <label htmlFor="internal" className="text-xs text-[#8A8F8F] cursor-pointer select-none">
+                      Comentario interno (Símbolo 🔒)
+                    </label>
+                  </div>
+                )}
               </div>
             </form>
           </footer>
+          {isAttachmentModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center">
+              <div
+                className="absolute inset-0 bg-black/40"
+                onClick={() => setIsAttachmentModalOpen(false)}
+                role="button"
+                tabIndex={-1}
+                aria-label="Cerrar modal"
+              />
+              <div className="relative bg-white rounded-2xl shadow-xl border border-[#E0E0E1] w-full max-w-lg mx-4 p-6 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-[#3F4444]">
+                    Adjuntos ({pendingCommentFiles.length})
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => setIsAttachmentModalOpen(false)}
+                    className="text-xs text-[#8A8F8F] hover:text-[#3F4444]"
+                  >
+                    Cerrar
+                  </button>
+                </div>
+                {commentUploading && (
+                  <div className="flex items-center gap-2 text-xs text-[#8A8F8F]">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    Subiendo adjuntos...
+                  </div>
+                )}
+                <input
+                  ref={commentFileInputRef}
+                  type="file"
+                  multiple
+                  accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv"
+                  className="hidden"
+                  onChange={(e) => {
+                    handleCommentFilesChange(e.target.files)
+                    if (commentFileInputRef.current) {
+                      commentFileInputRef.current.value = ''
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => commentFileInputRef.current?.click()}
+                  className="inline-flex items-center gap-2 px-3 py-2 text-xs font-medium text-[#8A8F8F] hover:text-[#3F4444] hover:bg-[#F7F7F8] rounded-xl transition-colors"
+                >
+                  Agregar archivos
+                </button>
+                {commentUploadError && (
+                  <p className="text-xs text-red-500">{commentUploadError}</p>
+                )}
+                {pendingCommentFiles.length > 0 ? (
+                  <div className="space-y-2 max-h-48 overflow-auto">
+                    {pendingCommentFiles.map((file, index) => (
+                      <div
+                        key={`${file.name}-${index}`}
+                        className="flex items-center justify-between text-xs text-[#5A5F5F] bg-[#F7F7F8] border border-[#E0E0E1] rounded-lg px-3 py-2"
+                      >
+                        <span className="truncate">{file.name}</span>
+                        <button
+                          type="button"
+                          onClick={() => removePendingCommentFile(index)}
+                          className="text-[#8A8F8F] hover:text-red-500"
+                        >
+                          Quitar
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-xs text-[#8A8F8F]">No hay archivos seleccionados.</div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

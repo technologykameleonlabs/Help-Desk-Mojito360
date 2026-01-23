@@ -7,6 +7,7 @@ import {
   Archive, 
   Users,
   Building2,
+  Tag,
   ChevronRight,
   ChevronLeft,
   LogOut,
@@ -30,6 +31,7 @@ export function Sidebar() {
     ? [
         { to: '/users', icon: Users, label: 'Usuarios' },
         { to: '/entities', icon: Building2, label: 'Entidades' },
+        { to: '/labels', icon: Tag, label: 'Labels' },
       ]
     : []
 

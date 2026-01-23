@@ -251,6 +251,7 @@ export function UsersPage() {
                 >
                   <option value="admin">Admin</option>
                   <option value="agent">Agent</option>
+                  <option value="client">Client</option>
                   <option value="dev">Dev</option>
                 </select>
               </div>
@@ -303,6 +304,7 @@ export function UsersPage() {
                           >
                             <option value="admin">Admin</option>
                             <option value="agent">Agent</option>
+                            <option value="client">Client</option>
                             <option value="dev">Dev</option>
                           </select>
                           <select
