@@ -5,7 +5,9 @@ import {
   useComments, 
   useCreateComment,
   useProfiles,
-  useEntities
+  useEntities,
+  useLabels,
+  useUpdateTicketLabels
 } from '../hooks/useData'
 import { useCreateMentionNotifications } from '../hooks/useNotifications'
 import { useRealtimeComments } from '../hooks/useRealtime'
@@ -23,13 +25,18 @@ import {
   Loader2,
   AlertCircle,
   ExternalLink,
-  History
+  History,
+  ChevronUp,
+  ChevronDown,
+  Paperclip
 } from 'lucide-react'
 import { STAGES, PRIORITIES, type TicketStage, type TicketPriority, type Ticket } from '../lib/supabase'
 import { useState, useCallback, useMemo, useEffect } from 'react'
 import { clsx } from 'clsx'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
+import { MultiSelect } from './MultiSelect'
+import { getCategoryOption } from '../lib/ticketOptions'
 
 const TICKET_TYPES = [
   '🔔 Alertas', '🔼 Carga', '💽 Dato', '📝 Documentos', 
@@ -39,7 +46,7 @@ const TICKET_TYPES = [
 
 const APPLICATION_OPTIONS = ['Mojito360', 'Wintruck', 'Odoo', 'Otros']
 
-type EditableField = 'stage' | 'priority' | 'entity_id' | 'assigned_to' | 'ticket_type' | 'application'
+type EditableField = 'stage' | 'priority' | 'entity_id' | 'assigned_to' | 'ticket_type' | 'application' | 'labels'
 
 export function TicketDetail() {
   const { id } = useParams<{ id: string }>()
@@ -49,7 +56,9 @@ export function TicketDetail() {
   const { data: comments } = useComments(id!)
   const { data: profiles } = useProfiles()
   const { data: entities } = useEntities()
+  const { data: labels } = useLabels()
   const updateTicket = useUpdateTicket()
+  const updateTicketLabels = useUpdateTicketLabels()
 
   // Subscribe to realtime comment updates
   useRealtimeComments(id!)
@@ -60,6 +69,8 @@ export function TicketDetail() {
   const [commentText, setCommentText] = useState('')
   const [isInternal, setIsInternal] = useState(false)
   const [mentionedUserIds, setMentionedUserIds] = useState<string[]>([])
+  const [isChatOpen, setIsChatOpen] = useState(false)
+  const [selectedLabelIds, setSelectedLabelIds] = useState<string[]>([])
   const [editingFields, setEditingFields] = useState<Set<EditableField>>(new Set())
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
   const [awaitingRefresh, setAwaitingRefresh] = useState(false)
@@ -85,6 +96,7 @@ export function TicketDetail() {
       application: ticket.application || '',
     })
     setEditingFields(new Set())
+    setSelectedLabelIds(ticket.labels?.map(item => item.label.id) || [])
   }, [ticket])
 
   useEffect(() => {
@@ -95,14 +107,14 @@ export function TicketDetail() {
 
   useEffect(() => {
     if (!awaitingRefresh) return
-    if (!updateTicket.isPending && !isFetching) {
+    if (!updateTicket.isPending && !updateTicketLabels.isPending && !isFetching) {
       setAwaitingRefresh(false)
       if (pendingSaveMessage) {
         setSaveMessage(pendingSaveMessage)
         setPendingSaveMessage(null)
       }
     }
-  }, [awaitingRefresh, updateTicket.isPending, isFetching, pendingSaveMessage])
+  }, [awaitingRefresh, updateTicket.isPending, updateTicketLabels.isPending, isFetching, pendingSaveMessage])
 
   // Track mentions as user types
   const handleMention = useCallback((userId: string) => {
@@ -110,6 +122,14 @@ export function TicketDetail() {
       prev.includes(userId) ? prev : [...prev, userId]
     )
   }, [])
+
+  const labelsChanged = useMemo(() => {
+    const current = ticket?.labels?.map(item => item.label.id) || []
+    if (current.length !== selectedLabelIds.length) return true
+    const sortedCurrent = [...current].sort()
+    const sortedSelected = [...selectedLabelIds].sort()
+    return sortedCurrent.some((value, index) => value !== sortedSelected[index])
+  }, [ticket?.labels, selectedLabelIds])
 
   const hasChanges = useMemo(() => {
     if (!ticket) return false
@@ -119,9 +139,10 @@ export function TicketDetail() {
       (draft.entity_id || null) !== ticket.entity_id ||
       (draft.assigned_to || null) !== ticket.assigned_to ||
       (draft.ticket_type || '') !== (ticket.ticket_type || '') ||
-      (draft.application || '') !== (ticket.application || '')
+      (draft.application || '') !== (ticket.application || '') ||
+      labelsChanged
     )
-  }, [draft, ticket])
+  }, [draft, ticket, labelsChanged])
 
   const selectedEntity = useMemo(() => {
     if (draft.entity_id) {
@@ -133,6 +154,7 @@ export function TicketDetail() {
   const entityResponsible = selectedEntity?.assigned_to_profile?.full_name ||
     selectedEntity?.assigned_to_profile?.email ||
     ''
+  const categoryOption = getCategoryOption(ticket?.category)
 
   const closePath = useMemo(() => {
     const path = location.pathname
@@ -141,6 +163,18 @@ export function TicketDetail() {
     if (path.startsWith('/archive')) return '/archive'
     return '/'
   }, [location.pathname])
+
+  const labelOptions = labels?.map(label => ({
+    value: label.id,
+    label: label.name,
+    color: label.color,
+  })) || []
+
+  const selectedLabels = useMemo(() => {
+    if (!labels) return []
+    const selectedSet = new Set(selectedLabelIds)
+    return labels.filter(label => selectedSet.has(label.id))
+  }, [labels, selectedLabelIds])
 
   if (isLoading) {
     return (
@@ -209,7 +243,16 @@ export function TicketDetail() {
       if ((draft.ticket_type || '') !== (ticket.ticket_type || '')) updates.ticket_type = draft.ticket_type || null
       if ((draft.application || '') !== (ticket.application || '')) updates.application = draft.application || null
 
-      await updateTicket.mutateAsync(updates)
+      if (Object.keys(updates).length > 1) {
+        await updateTicket.mutateAsync(updates)
+      }
+
+      if (labelsChanged) {
+        await updateTicketLabels.mutateAsync({
+          ticketId: ticket.id,
+          labelIds: selectedLabelIds,
+        })
+      }
       setEditingFields(new Set())
     } catch (e) {
       console.error(e)
@@ -228,6 +271,7 @@ export function TicketDetail() {
       ticket_type: ticket.ticket_type || '',
       application: ticket.application || '',
     })
+    setSelectedLabelIds(ticket.labels?.map(item => item.label.id) || [])
     setEditingFields(new Set())
   }
 
@@ -252,7 +296,7 @@ export function TicketDetail() {
     })) || [])
   ]
 
-  const isSaving = updateTicket.isPending || awaitingRefresh || isFetching
+  const isSaving = updateTicket.isPending || updateTicketLabels.isPending || awaitingRefresh || isFetching
 
   return (
     <div className="flex flex-col h-full bg-white border-l border-[#E0E0E1] w-[600px] animate-in slide-in-from-right duration-300 shadow-xl relative z-20">
@@ -263,13 +307,13 @@ export function TicketDetail() {
           <h2 className="text-[#3F4444] font-semibold flex-1 line-clamp-1">{ticket.title}</h2>
         </div>
         <div className="flex items-center gap-2">
-          {ticket.mojito_ref ? (
+          {ticket.external_url ? (
             <a
-              href={`https://app.mojito360.com/resources/support/detail-case/${ticket.mojito_ref}`}
+              href={ticket.external_url}
               target="_blank"
               rel="noreferrer"
               className="p-1.5 hover:bg-[#F7F7F8] rounded-lg text-[#8A8F8F] transition-colors"
-              title="Abrir en Mojito360"
+              title="Abrir en origen"
             >
               <ExternalLink className="w-5 h-5" />
             </a>
@@ -283,10 +327,12 @@ export function TicketDetail() {
         </div>
       </header>
 
-      {/* Content */}
-      <div className="flex-1 overflow-auto">
-        {/* Quick Actions */}
-        <div className="p-6 space-y-6">
+      {!isChatOpen ? (
+        <>
+          {/* Content */}
+          <div className="flex-1 overflow-auto">
+            {/* Quick Actions */}
+            <div className="p-6 space-y-6">
           {/* Properties */}
           <div className="relative space-y-4 py-4 border-b border-[#E0E0E1]">
             {isSaving && (
@@ -389,6 +435,16 @@ export function TicketDetail() {
                 <div className="flex items-start text-sm gap-3">
                   <Tag className="w-4 h-4 text-[#8A8F8F] mt-0.5" />
                   <div className="flex-1">
+                    <span className="text-[#8A8F8F] block">Categoría</span>
+                    <span className="text-[#3F4444] font-medium">
+                      {categoryOption ? `${categoryOption.icon} ${categoryOption.label}` : '---'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-start text-sm gap-3">
+                  <Tag className="w-4 h-4 text-[#8A8F8F] mt-0.5" />
+                  <div className="flex-1">
                     <span className="text-[#8A8F8F] block">Aplicación</span>
                     {editingFields.has('application') ? (
                       <select
@@ -445,8 +501,16 @@ export function TicketDetail() {
                 <div className="flex items-start text-sm gap-3">
                   <ExternalLink className="w-4 h-4 text-[#8A8F8F] mt-0.5" />
                   <div className="flex-1">
-                    <span className="text-[#8A8F8F] block">Referencia Mojito</span>
-                    <span className="text-[#3F4444] font-medium">{ticket.mojito_ref ?? ''}</span>
+                    <span className="text-[#8A8F8F] block">Referencia externa</span>
+                    <span className="text-[#3F4444] font-medium">{ticket.external_ref ?? ''}</span>
+                  </div>
+                </div>
+
+                <div className="flex items-start text-sm gap-3">
+                  <Tag className="w-4 h-4 text-[#8A8F8F] mt-0.5" />
+                  <div className="flex-1">
+                    <span className="text-[#8A8F8F] block">Fuente externa</span>
+                    <span className="text-[#3F4444] font-medium">{ticket.external_source ?? '---'}</span>
                   </div>
                 </div>
 
@@ -471,6 +535,49 @@ export function TicketDetail() {
                         className="text-left text-[#3F4444] font-medium hover:text-[#6353FF] transition-colors"
                       >
                         {ticket.assigned_to_profile?.full_name || 'Sin asignar'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-start text-sm gap-3">
+                  <Tag className="w-4 h-4 text-[#8A8F8F] mt-0.5" />
+                  <div className="flex-1">
+                    <span className="text-[#8A8F8F] block">Etiqueta</span>
+                    {editingFields.has('labels') ? (
+                      <div className="mt-1">
+                        <MultiSelect
+                          options={labelOptions}
+                          value={selectedLabelIds}
+                          onChange={setSelectedLabelIds}
+                          placeholder="Sin etiquetas"
+                        />
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => enableEdit('labels')}
+                        className="text-left text-[#3F4444] font-medium hover:text-[#6353FF] transition-colors"
+                      >
+                        {selectedLabels.length ? (
+                          <div className="flex flex-wrap items-center gap-1">
+                            {selectedLabels.map(label => (
+                              <span
+                                key={label.id}
+                                className={clsx(
+                                  "inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium",
+                                  label.color ? "text-white" : "bg-[#F7F7F8] text-[#5A5F5F]",
+                                  label.color && !label.color.startsWith('#') ? label.color : ""
+                                )}
+                                style={label.color?.startsWith('#') ? { backgroundColor: label.color } : undefined}
+                              >
+                                {label.name}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          '---'
+                        )}
                       </button>
                     )}
                   </div>
@@ -549,15 +656,45 @@ export function TicketDetail() {
             </div>
           )}
 
-          {/* Comments Section */}
-          <div className="space-y-4 pt-4">
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setIsChatOpen(true)}
+            className="p-4 border-t border-[#E0E0E1] bg-white flex items-center justify-between text-left"
+          >
             <div className="flex items-center gap-2">
               <MessageSquare className="w-4 h-4 text-[#8A8F8F]" />
-              <h3 className="text-xs font-bold text-[#8A8F8F] uppercase tracking-widest">Comentarios ({comments?.length || 0})</h3>
+              <span className="text-xs font-bold text-[#8A8F8F] uppercase tracking-widest">
+                Mensajes ({comments?.length || 0})
+              </span>
             </div>
-            
-            <div className="space-y-4">
-              {comments?.map((comment) => (
+            <ChevronUp className="w-4 h-4 text-[#8A8F8F]" />
+          </button>
+        </>
+      ) : (
+        <div className="flex-1 flex flex-col">
+          <div className="px-6 py-4 border-b border-[#E0E0E1] flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <MessageSquare className="w-4 h-4 text-[#8A8F8F]" />
+              <h3 className="text-xs font-bold text-[#8A8F8F] uppercase tracking-widest">
+                Mensajes ({comments?.length || 0})
+              </h3>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsChatOpen(false)}
+              className="p-1.5 hover:bg-[#F7F7F8] rounded-lg text-[#8A8F8F] transition-colors"
+              title="Colapsar"
+            >
+              <ChevronDown className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-auto p-6 space-y-4">
+            {comments?.length ? (
+              comments.map((comment) => (
                 <div 
                   key={comment.id} 
                   className={clsx(
@@ -575,45 +712,55 @@ export function TicketDetail() {
                   </div>
                   <p className="text-[#3F4444]">{comment.content}</p>
                 </div>
-              ))}
-            </div>
+              ))
+            ) : (
+              <div className="text-sm text-[#8A8F8F]">Sin mensajes todavía.</div>
+            )}
           </div>
-        </div>
-      </div>
 
-      {/* Comment Input with Mentions */}
-      <footer className="p-4 border-t border-[#E0E0E1] bg-white">
-        <form onSubmit={handleAddComment} className="space-y-3">
-          <div className="relative">
-            <MentionTextarea
-              value={commentText}
-              onChange={setCommentText}
-              onMention={handleMention}
-              placeholder="Escribe un comentario... (usa @ para mencionar)"
-              className="w-full bg-[#F7F7F8] border border-[#E0E0E1] rounded-xl px-4 py-3 pr-12 text-sm text-[#3F4444] placeholder:text-[#B0B5B5] outline-none focus:border-[#6353FF] transition-all resize-none min-h-[100px]"
-            />
-            <button
-              type="submit"
-              disabled={createComment.isPending || !commentText.trim()}
-              className="absolute bottom-3 right-3 p-2 bg-[#6353FF] hover:bg-[#5244e6] text-white rounded-full transition-all disabled:opacity-50"
-            >
-              {createComment.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-            </button>
-          </div>
-          <div className="flex items-center gap-2">
-            <input 
-              type="checkbox" 
-              id="internal" 
-              checked={isInternal}
-              onChange={(e) => setIsInternal(e.target.checked)}
-              className="rounded border-[#E0E0E1] bg-white text-[#6353FF] focus:ring-0" 
-            />
-            <label htmlFor="internal" className="text-xs text-[#8A8F8F] cursor-pointer select-none">
-              Comentario interno (Símbolo 🔒)
-            </label>
-          </div>
-        </form>
-      </footer>
+          <footer className="p-4 border-t border-[#E0E0E1] bg-white">
+            <form onSubmit={handleAddComment} className="space-y-3">
+              <div className="relative">
+                <MentionTextarea
+                  value={commentText}
+                  onChange={setCommentText}
+                  onMention={handleMention}
+                  placeholder="Escribe un comentario... (usa @ para mencionar)"
+                  className="w-full bg-[#F7F7F8] border border-[#E0E0E1] rounded-xl px-4 py-3 pr-12 text-sm text-[#3F4444] placeholder:text-[#B0B5B5] outline-none focus:border-[#6353FF] transition-all resize-none min-h-[100px]"
+                />
+                <button
+                  type="submit"
+                  disabled={createComment.isPending || !commentText.trim()}
+                  className="absolute bottom-3 right-3 p-2 bg-[#6353FF] hover:bg-[#5244e6] text-white rounded-full transition-all disabled:opacity-50"
+                >
+                  {createComment.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                </button>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-2 px-3 py-2 text-xs font-medium text-[#8A8F8F] hover:text-[#3F4444] hover:bg-[#F7F7F8] rounded-xl transition-colors"
+                >
+                  <Paperclip className="w-4 h-4" />
+                  Adjuntar
+                </button>
+                <div className="flex items-center gap-2">
+                  <input 
+                    type="checkbox" 
+                    id="internal" 
+                    checked={isInternal}
+                    onChange={(e) => setIsInternal(e.target.checked)}
+                    className="rounded border-[#E0E0E1] bg-white text-[#6353FF] focus:ring-0" 
+                  />
+                  <label htmlFor="internal" className="text-xs text-[#8A8F8F] cursor-pointer select-none">
+                    Comentario interno (Símbolo 🔒)
+                  </label>
+                </div>
+              </div>
+            </form>
+          </footer>
+        </div>
+      )}
     </div>
   )
 }

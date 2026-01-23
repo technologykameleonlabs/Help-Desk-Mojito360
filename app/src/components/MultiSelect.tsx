@@ -57,6 +57,14 @@ export function MultiSelect({
   const filteredOptions = options.filter(opt =>
     opt.label.toLowerCase().includes(searchTerm.trim().toLowerCase())
   )
+  const getHexStyle = (color?: string) => {
+    if (!color || !color.startsWith('#')) return undefined
+    return { backgroundColor: color, color: '#fff' }
+  }
+  const getColorClass = (color?: string) => {
+    if (!color || color.startsWith('#')) return ''
+    return color
+  }
 
   useEffect(() => {
     if (!isOpen) {
@@ -72,10 +80,18 @@ export function MultiSelect({
         </label>
       )}
       
-      {/* Trigger Button */}
-      <button
-        type="button"
+      {/* Trigger */}
+      <div
+        role="button"
+        tabIndex={0}
+        aria-expanded={isOpen}
         onClick={() => setIsOpen(!isOpen)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault()
+            setIsOpen((prev) => !prev)
+          }
+        }}
         className={clsx(
           "w-full flex items-center justify-between gap-2 px-3 py-2 bg-white border rounded-lg text-sm text-left transition-all",
           isOpen 
@@ -93,8 +109,10 @@ export function MultiSelect({
                   key={opt.value}
                   className={clsx(
                     "inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium",
-                    opt.color ? `${opt.color} text-white` : "bg-[#F7F7F8] text-[#5A5F5F]"
+                    opt.color ? "text-white" : "bg-[#F7F7F8] text-[#5A5F5F]",
+                    getColorClass(opt.color)
                   )}
+                  style={getHexStyle(opt.color)}
                 >
                   {opt.label}
                 </span>
@@ -120,7 +138,7 @@ export function MultiSelect({
             isOpen && "rotate-180"
           )} />
         </div>
-      </button>
+      </div>
 
       {/* Dropdown */}
       {isOpen && (
@@ -171,7 +189,10 @@ export function MultiSelect({
                   </div>
                   
                   {option.color && (
-                    <span className={clsx("w-2 h-2 rounded-full", option.color)} />
+                    <span
+                      className={clsx("w-2 h-2 rounded-full", getColorClass(option.color))}
+                      style={option.color.startsWith('#') ? { backgroundColor: option.color } : undefined}
+                    />
                   )}
                   
                   <span className="flex-1">{option.label}</span>
