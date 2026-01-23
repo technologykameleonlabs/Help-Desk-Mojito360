@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Sidebar } from '../components/Sidebar'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { useCurrentUser, useEntities, useSlaPolicies, useCreateSlaPolicy, useUpdateSlaPolicy, useDeleteSlaPolicy, useSlaThresholds, useCreateSlaThreshold, useUpdateSlaThreshold, useDeleteSlaThreshold } from '../hooks/useData'
-import type { SlaPolicy, SlaThreshold } from '../lib/supabase'
+import type { SlaPolicy, SlaThreshold, TicketPriority } from '../lib/supabase'
 import { Loader2, Shield, Sliders, Plus, Pencil, Trash2, Filter } from 'lucide-react'
 
 const APPLICATION_OPTIONS = ['Mojito360', 'Wintruck', 'Odoo', 'Otros']
@@ -16,7 +16,7 @@ type PolicyFormState = {
 
 type ThresholdFormState = {
   policy_id: string
-  priority: string
+  priority: TicketPriority | ''
   application: string
   entity_id: string
   warning_minutes: string
@@ -507,7 +507,7 @@ export function SlaSettingsPage() {
                 <label className="block text-sm font-medium text-[#3F4444]">Prioridad</label>
                 <select
                   value={thresholdForm.priority}
-                  onChange={(e) => setThresholdForm(prev => ({ ...prev, priority: e.target.value }))}
+                  onChange={(e) => setThresholdForm(prev => ({ ...prev, priority: e.target.value as TicketPriority | '' }))}
                   className="w-full px-3 py-2 bg-white border border-[#E0E0E1] rounded-xl text-sm text-[#3F4444] outline-none focus:ring-2 focus:ring-[#6353FF] focus:ring-opacity-30 focus:border-[#6353FF] transition-all appearance-none"
                 >
                   <option value="">Todas</option>
