@@ -9,6 +9,14 @@ type TicketListProps = {
 }
 
 export function TicketList({ tickets, onTicketClick }: TicketListProps) {
+  const getLabelStyle = (color?: string) => {
+    if (!color) return undefined
+    if (color.startsWith('#')) {
+      return { backgroundColor: color, color: '#fff' }
+    }
+    return undefined
+  }
+
   if (tickets.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-[#8A8F8F]">
@@ -23,10 +31,12 @@ export function TicketList({ tickets, onTicketClick }: TicketListProps) {
       <div className="grid grid-cols-12 gap-4 px-4 py-3 bg-[#FAFAFA] border-b border-[#E0E0E1] text-[10px] uppercase font-bold text-[#8A8F8F] tracking-wider">
         <div className="col-span-1">Ref</div>
         <div className="col-span-4">Título</div>
-        <div className="col-span-2">Estado</div>
         <div className="col-span-1">Prioridad</div>
-        <div className="col-span-2">Entidad</div>
-        <div className="col-span-2">Asignado</div>
+        <div className="col-span-1">Categoría</div>
+        <div className="col-span-1">Etiquetas</div>
+        <div className="col-span-2">Estado</div>
+        <div className="col-span-1">Entidad</div>
+        <div className="col-span-1">Asignado</div>
       </div>
 
       {/* Rows */}
@@ -58,6 +68,48 @@ export function TicketList({ tickets, onTicketClick }: TicketListProps) {
                 )}
               </div>
 
+              {/* Priority */}
+              <div className="col-span-1">
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${priority.color} text-white`}>
+                  {priority.label}
+                </span>
+              </div>
+
+              {/* Category */}
+              <div className="col-span-1">
+                {ticket.category ? (
+                  <span className="text-xs text-[#5A5F5F]">{ticket.category}</span>
+                ) : (
+                  <span className="text-xs text-[#B0B5B5]">—</span>
+                )}
+              </div>
+
+              {/* Labels */}
+              <div className="col-span-1">
+                {ticket.labels && ticket.labels.length > 0 ? (
+                  <div className="flex items-center gap-1 flex-wrap">
+                    {ticket.labels.slice(0, 2).map(labelItem => (
+                      <span
+                        key={labelItem.label.id}
+                        className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                          labelItem.label.color && !labelItem.label.color.startsWith('#')
+                            ? `${labelItem.label.color} text-white`
+                            : 'bg-[#F7F7F8] text-[#5A5F5F]'
+                        }`}
+                        style={getLabelStyle(labelItem.label.color)}
+                      >
+                        {labelItem.label.name}
+                      </span>
+                    ))}
+                    {ticket.labels.length > 2 && (
+                      <span className="text-[10px] text-[#8A8F8F]">+{ticket.labels.length - 2}</span>
+                    )}
+                  </div>
+                ) : (
+                  <span className="text-xs text-[#B0B5B5]">—</span>
+                )}
+              </div>
+
               {/* Stage */}
               <div className="col-span-2">
                 <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] font-medium ${stage.color} bg-opacity-10`}>
@@ -66,15 +118,8 @@ export function TicketList({ tickets, onTicketClick }: TicketListProps) {
                 </span>
               </div>
 
-              {/* Priority */}
-              <div className="col-span-1">
-                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${priority.color} text-white`}>
-                  {priority.label}
-                </span>
-              </div>
-
               {/* Entity */}
-              <div className="col-span-2">
+              <div className="col-span-1">
                 {ticket.entity ? (
                   <span className="flex items-center gap-1.5 text-xs text-[#5A5F5F]">
                     <Building2 className="w-3 h-3 text-[#8A8F8F]" />
@@ -86,7 +131,7 @@ export function TicketList({ tickets, onTicketClick }: TicketListProps) {
               </div>
 
               {/* Assigned To */}
-              <div className="col-span-2">
+              <div className="col-span-1">
                 {ticket.assigned_to_profile ? (
                   <span className="flex items-center gap-1.5 text-xs text-[#5A5F5F]">
                     <div className="w-5 h-5 rounded-full bg-[#6353FF] flex items-center justify-center text-white text-[10px] font-medium">

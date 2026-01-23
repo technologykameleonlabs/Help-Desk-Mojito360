@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
-import type { Ticket, Entity, Profile, Comment, TicketStage, TicketPriority, Label } from '../lib/supabase'
+import type { Ticket, Entity, Profile, Comment, TicketStage, TicketPriority, Label, SavedView, SavedViewScope } from '../lib/supabase'
 
 // Closed/archived stages to filter out by default
 const CLOSED_STAGES: TicketStage[] = ['done', 'cancelled', 'paused']
@@ -460,6 +460,83 @@ export function useCurrentUser() {
         .single()
       
       return data as Profile | null
+    }
+  })
+}
+
+// Saved views
+export function useSavedViews(scope: SavedViewScope) {
+  return useQuery({
+    queryKey: ['saved_views', scope],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('saved_views')
+        .select('*')
+        .eq('scope', scope)
+        .order('created_at', { ascending: false })
+
+      if (error) throw error
+      return data as SavedView[]
+    }
+  })
+}
+
+export function useCreateSavedView() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (input: Omit<SavedView, 'id' | 'created_at' | 'updated_at'>) => {
+      const { data, error } = await supabase
+        .from('saved_views')
+        .insert(input)
+        .select()
+        .single()
+
+      if (error) throw error
+      return data as SavedView
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['saved_views', variables.scope] })
+    }
+  })
+}
+
+export function useUpdateSavedView() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ id, ...updates }: Partial<SavedView> & { id: string }) => {
+      const { data, error } = await supabase
+        .from('saved_views')
+        .update({ ...updates, updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .select()
+        .single()
+
+      if (error) throw error
+      return data as SavedView
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['saved_views', data.scope] })
+    }
+  })
+}
+
+export function useDeleteSavedView() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ id, scope }: { id: string; scope: SavedViewScope }) => {
+      const { error } = await supabase
+        .from('saved_views')
+        .delete()
+        .eq('id', id)
+
+      if (error) throw error
+      return { id, scope }
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['saved_views', data.scope] })
     }
   })
 }

@@ -111,6 +111,20 @@ export type Comment = {
   user?: Profile
 }
 
+export type SavedViewVisibility = 'private' | 'public'
+export type SavedViewScope = 'dashboard'
+
+export type SavedView = {
+  id: string
+  name: string
+  owner_id: string
+  scope: SavedViewScope
+  visibility: SavedViewVisibility
+  config: Record<string, unknown>
+  created_at: string
+  updated_at: string
+}
+
 // Stage display configuration
 export const STAGES: Record<TicketStage, { label: string; color: string }> = {
 
