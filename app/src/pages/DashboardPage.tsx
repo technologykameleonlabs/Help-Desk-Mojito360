@@ -572,7 +572,7 @@ export function DashboardPage() {
                           </button>
                           <button
                             onClick={handleSaveView}
-                            disabled={createSavedView.isLoading || updateSavedView.isLoading}
+                            disabled={createSavedView.isPending || updateSavedView.isPending}
                             className="px-3 py-2 text-sm font-medium text-white bg-[#6353FF] rounded-lg hover:bg-[#5647f5] transition-colors disabled:opacity-60"
                           >
                             {editingViewId ? 'Actualizar' : 'Guardar'}
