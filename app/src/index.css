@@ -30,6 +30,22 @@
   --border-light: #ECECED;
 }
 
+.dark {
+  color-scheme: dark;
+  --primary: #8b5cf6;
+  --primary-hover: #7c3aed;
+  --primary-light: rgba(139, 92, 246, 0.18);
+  --bg-main: #0f1115;
+  --bg-secondary: #151821;
+  --bg-tertiary: #1f2430;
+  --text-title: #e6e6e6;
+  --text-body: #c9c9c9;
+  --text-muted: #9aa0a6;
+  --text-placeholder: #6b7280;
+  --border: #2b2f3a;
+  --border-light: #3a3f4b;
+}
+
 body {
   background-color: var(--bg-main);
   color: var(--text-body);
@@ -124,4 +140,45 @@ select {
   background-position: right 0.75rem center;
   background-repeat: no-repeat;
   background-size: 1.25em 1.25em;
+}
+
+/* Dark mode overrides for existing color classes */
+.dark .bg-white {
+  background-color: var(--bg-main) !important;
+}
+
+.dark .bg-\[\#F7F7F8\] {
+  background-color: var(--bg-secondary) !important;
+}
+
+.dark .bg-\[\#FAFAFA\] {
+  background-color: var(--bg-secondary) !important;
+}
+
+.dark .bg-\[\#ECECED\] {
+  background-color: var(--bg-tertiary) !important;
+}
+
+.dark .border-\[\#E0E0E1\] {
+  border-color: var(--border) !important;
+}
+
+.dark .border-\[\#ECECED\] {
+  border-color: var(--border-light) !important;
+}
+
+.dark .text-\[\#3F4444\] {
+  color: var(--text-title) !important;
+}
+
+.dark .text-\[\#5A5F5F\] {
+  color: var(--text-body) !important;
+}
+
+.dark .text-\[\#8A8F8F\] {
+  color: var(--text-muted) !important;
+}
+
+.dark .text-\[\#B0B5B5\] {
+  color: var(--text-placeholder) !important;
 }

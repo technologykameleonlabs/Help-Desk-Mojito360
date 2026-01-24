@@ -167,6 +167,8 @@ export function KanbanBoard({ onTicketClick, filters }: KanbanBoardProps) {
     fromStage: TicketStage
     toStage: TicketStage
   } | null>(null)
+  const [pendingSolution, setPendingSolution] = useState('')
+  const [pendingSolutionError, setPendingSolutionError] = useState<string | null>(null)
   const [awaitingRefresh, setAwaitingRefresh] = useState(false)
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
@@ -338,6 +340,13 @@ export function KanbanBoard({ onTicketClick, filters }: KanbanBoardProps) {
       setPendingMove(null)
     }
   }, [awaitingRefresh, updateTicket.isPending, isFetching])
+
+  useEffect(() => {
+    if (pendingMove?.toStage === 'pending_validation') {
+      setPendingSolution('')
+      setPendingSolutionError(null)
+    }
+  }, [pendingMove?.toStage])
   
   if (isLoading) {
     return (
@@ -403,10 +412,32 @@ export function KanbanBoard({ onTicketClick, filters }: KanbanBoardProps) {
         }
         description={
           pendingMove ? (
-            <div className="flex items-center gap-2 text-sm text-[#5A5F5F]">
-              <span className="font-semibold">{STAGES[pendingMove.fromStage].label}</span>
-              <span className="text-[#8A8F8F]">→</span>
-              <span className="font-semibold">{STAGES[pendingMove.toStage].label}</span>
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-sm text-[#5A5F5F]">
+                <span className="font-semibold">{STAGES[pendingMove.fromStage].label}</span>
+                <span className="text-[#8A8F8F]">→</span>
+                <span className="font-semibold">{STAGES[pendingMove.toStage].label}</span>
+              </div>
+              {pendingMove.toStage === 'pending_validation' && (
+                <div className="space-y-2">
+                  <label className="block text-xs font-semibold text-[#3F4444]">
+                    Mensaje de solución
+                  </label>
+                  <textarea
+                    value={pendingSolution}
+                    onChange={(event) => {
+                      setPendingSolution(event.target.value)
+                      if (pendingSolutionError) setPendingSolutionError(null)
+                    }}
+                    rows={4}
+                    placeholder="Describe la solución aplicada..."
+                    className="w-full px-3 py-2 text-sm text-[#3F4444] bg-white border border-[#E0E0E1] rounded-xl outline-none focus:ring-1 focus:ring-[#6353FF] transition-all resize-none"
+                  />
+                  {pendingSolutionError && (
+                    <div className="text-[11px] text-red-500">{pendingSolutionError}</div>
+                  )}
+                </div>
+              )}
             </div>
           ) : null
         }
@@ -417,13 +448,25 @@ export function KanbanBoard({ onTicketClick, filters }: KanbanBoardProps) {
         onCancel={() => {
           if (!isUpdating) {
             setPendingMove(null)
+            setPendingSolution('')
+            setPendingSolutionError(null)
           }
         }}
         onConfirm={async () => {
           if (!pendingMove) return
+          if (pendingMove.toStage === 'pending_validation' && !pendingSolution.trim()) {
+            setPendingSolutionError('Debes ingresar un mensaje de solución.')
+            return
+          }
           setAwaitingRefresh(true)
           try {
-            await updateTicket.mutateAsync({ id: pendingMove.ticketId, stage: pendingMove.toStage })
+            await updateTicket.mutateAsync({
+              id: pendingMove.ticketId,
+              stage: pendingMove.toStage,
+              solution: pendingMove.toStage === 'pending_validation'
+                ? pendingSolution.trim()
+                : undefined
+            })
           } catch (error) {
             console.error(error)
             alert('No se pudo actualizar el estado del ticket.')

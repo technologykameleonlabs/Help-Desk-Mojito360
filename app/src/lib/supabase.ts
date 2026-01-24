@@ -67,6 +67,8 @@ export type Ticket = {
   priority: TicketPriority
   assigned_to: string | null
   created_by: string | null
+  created_by_email?: string | null
+  updated_by?: string | null
   entity_id: string | null
   category: string | null
   application: string | null
@@ -79,6 +81,8 @@ export type Ticket = {
   responsibility: string | null
   sharepoint_url: string | null
   solution: string | null
+  pending_validation_since?: string | null
+  last_client_activity_at?: string | null
   created_at: string
   updated_at: string
   // Relations (populated by joins)
@@ -128,6 +132,14 @@ export type TicketStageHistory = {
   duration_seconds: number | null
   is_paused: boolean
   created_at: string
+  changed_by?: string | null
+}
+
+export type AppSettings = {
+  id: number
+  auto_close_pending_validation_hours: number
+  system_user_id: string | null
+  updated_at: string
 }
 
 export type TicketSlaStatus = {

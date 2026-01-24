@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
-import type { Ticket, Entity, Profile, Comment, TicketStage, TicketPriority, Label, SavedView, SavedViewScope, SlaPolicy, SlaThreshold, TicketStageHistory, TicketSlaStatus } from '../lib/supabase'
+import type { Ticket, Entity, Profile, Comment, TicketStage, TicketPriority, Label, SavedView, SavedViewScope, SlaPolicy, SlaThreshold, TicketStageHistory, TicketSlaStatus, AppSettings } from '../lib/supabase'
 
 const chunkArray = <T,>(items: T[], size: number) => {
   const chunks: T[][] = []
@@ -146,9 +146,14 @@ export function useUpdateTicket() {
   
   return useMutation({
     mutationFn: async ({ id, ...updates }: Partial<Ticket> & { id: string }) => {
+      const { data: { user } } = await supabase.auth.getUser()
       const { data, error } = await supabase
         .from('tickets')
-        .update({ ...updates, updated_at: new Date().toISOString() })
+        .update({
+          ...updates,
+          updated_at: new Date().toISOString(),
+          updated_by: updates.updated_by ?? user?.id ?? null,
+        })
         .eq('id', id)
         .select()
         .single()
@@ -159,6 +164,44 @@ export function useUpdateTicket() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['tickets'] })
       queryClient.invalidateQueries({ queryKey: ['ticket', variables.id] })
+    }
+  })
+}
+
+// App settings
+export function useAppSettings() {
+  return useQuery({
+    queryKey: ['app_settings'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('app_settings')
+        .select('*')
+        .eq('id', 1)
+        .single()
+
+      if (error) throw error
+      return data as AppSettings
+    }
+  })
+}
+
+export function useUpdateAppSettings() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (updates: Partial<AppSettings>) => {
+      const { data, error } = await supabase
+        .from('app_settings')
+        .update({ ...updates, updated_at: new Date().toISOString() })
+        .eq('id', 1)
+        .select()
+        .single()
+
+      if (error) throw error
+      return data as AppSettings
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['app_settings'] })
     }
   })
 }

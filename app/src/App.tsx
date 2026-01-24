@@ -54,6 +54,13 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function App() {
+  useEffect(() => {
+    const saved = localStorage.getItem('theme')
+    const prefersDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches
+    const nextTheme = saved || (prefersDark ? 'dark' : 'light')
+    document.documentElement.classList.toggle('dark', nextTheme === 'dark')
+  }, [])
+
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>

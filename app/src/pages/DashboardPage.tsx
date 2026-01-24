@@ -465,7 +465,7 @@ export function DashboardPage() {
                                 >
                                   {viewItem.name}
                                 </button>
-                                {canManagePublic && (
+                                {viewItem.owner_id === currentUser?.id && (
                                   <div className="flex items-center gap-2 text-xs">
                                     <button
                                       onClick={() => startEditView(viewItem.id, viewItem.name, viewItem.visibility)}

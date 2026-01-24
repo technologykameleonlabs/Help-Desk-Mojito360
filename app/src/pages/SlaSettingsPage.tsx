@@ -1,8 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Sidebar } from '../components/Sidebar'
 import { ConfirmModal } from '../components/ConfirmModal'
-import { useCurrentUser, useEntities, useSlaPolicies, useCreateSlaPolicy, useUpdateSlaPolicy, useDeleteSlaPolicy, useSlaThresholds, useCreateSlaThreshold, useUpdateSlaThreshold, useDeleteSlaThreshold } from '../hooks/useData'
+import { useCurrentUser, useEntities, useSlaPolicies, useCreateSlaPolicy, useUpdateSlaPolicy, useDeleteSlaPolicy, useSlaThresholds, useCreateSlaThreshold, useUpdateSlaThreshold, useDeleteSlaThreshold, useAppSettings, useUpdateAppSettings } from '../hooks/useData'
 import type { SlaPolicy, SlaThreshold, TicketPriority } from '../lib/supabase'
 import { Loader2, Shield, Sliders, Plus, Pencil, Trash2, Filter } from 'lucide-react'
 
@@ -28,6 +28,8 @@ export function SlaSettingsPage() {
   const { data: currentUser, isLoading: loadingUser } = useCurrentUser()
   const { data: policies, isLoading: loadingPolicies } = useSlaPolicies()
   const { data: entities } = useEntities()
+  const { data: appSettings, isLoading: loadingSettings } = useAppSettings()
+  const updateAppSettings = useUpdateAppSettings()
   const [policyFilter, setPolicyFilter] = useState<string>('')
   const { data: thresholds, isLoading: loadingThresholds } = useSlaThresholds(policyFilter || undefined)
 
@@ -58,10 +60,13 @@ export function SlaSettingsPage() {
     breach_minutes: '',
   })
   const [deleteThresholdId, setDeleteThresholdId] = useState<string | null>(null)
+  const [autoCloseHours, setAutoCloseHours] = useState('')
+  const [autoCloseError, setAutoCloseError] = useState<string | null>(null)
 
   const isAdmin = currentUser?.role === 'admin'
   const isSavingPolicy = createPolicy.isPending || updatePolicy.isPending
   const isSavingThreshold = createThreshold.isPending || updateThreshold.isPending
+  const isSavingSettings = updateAppSettings.isPending
 
   const sortedPolicies = useMemo(() => {
     return (policies || []).slice().sort((a, b) => a.name.localeCompare(b.name))
@@ -71,6 +76,11 @@ export function SlaSettingsPage() {
     value: policy.id,
     label: policy.name,
   }))
+
+  useEffect(() => {
+    if (!appSettings) return
+    setAutoCloseHours(String(appSettings.auto_close_pending_validation_hours ?? 72))
+  }, [appSettings])
 
   if (loadingUser) {
     return (
@@ -104,6 +114,23 @@ export function SlaSettingsPage() {
     setEditingPolicyId(null)
     setPolicyForm({ name: '', description: '', is_active: true })
     setPolicyModalOpen(true)
+  }
+
+  const handleSaveAutoClose = async () => {
+    const nextValue = Number(autoCloseHours)
+    if (!Number.isFinite(nextValue) || nextValue <= 0) {
+      setAutoCloseError('Ingresa un número de horas válido.')
+      return
+    }
+    setAutoCloseError(null)
+    try {
+      await updateAppSettings.mutateAsync({
+        auto_close_pending_validation_hours: Math.round(nextValue)
+      })
+    } catch (error) {
+      console.error(error)
+      setAutoCloseError('No se pudo guardar la configuración.')
+    }
   }
 
   const openEditPolicy = (policy: SlaPolicy) => {
@@ -242,6 +269,46 @@ export function SlaSettingsPage() {
               </p>
             </div>
           </header>
+
+          <section className="bg-white border border-[#E0E0E1] rounded-2xl overflow-hidden">
+            <div className="px-6 py-4 border-b border-[#E0E0E1] flex items-center justify-between">
+              <div className="flex items-center gap-2 text-[#3F4444] font-semibold">
+                <Sliders className="w-5 h-5" />
+                Cierre automático de tickets
+              </div>
+            </div>
+            <div className="px-6 py-4 space-y-3">
+              <p className="text-sm text-[#8A8F8F]">
+                Define cuántas horas puede estar un ticket en &quot;Pdte. de validación&quot; sin respuesta del cliente antes de cerrarse automáticamente.
+              </p>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                <div className="w-full sm:max-w-[180px]">
+                  <label className="block text-[10px] uppercase font-bold text-[#8A8F8F] tracking-wider mb-1">
+                    Horas
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={autoCloseHours}
+                    onChange={(e) => setAutoCloseHours(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-[#E0E0E1] rounded-xl text-sm text-[#3F4444] outline-none focus:ring-2 focus:ring-[#6353FF] focus:ring-opacity-30 focus:border-[#6353FF] transition-all"
+                    disabled={loadingSettings}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={handleSaveAutoClose}
+                  disabled={loadingSettings || isSavingSettings}
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold bg-[#6353FF] hover:bg-[#5244e6] text-white rounded-xl transition-colors disabled:opacity-60"
+                >
+                  {isSavingSettings ? 'Guardando...' : 'Guardar'}
+                </button>
+              </div>
+              {autoCloseError && (
+                <div className="text-xs text-red-500">{autoCloseError}</div>
+              )}
+            </div>
+          </section>
 
           <section className="bg-white border border-[#E0E0E1] rounded-2xl overflow-hidden">
             <div className="px-6 py-4 border-b border-[#E0E0E1] flex items-center justify-between">

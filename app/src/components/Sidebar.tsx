@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard,
@@ -14,7 +14,9 @@ import {
   ChevronLeft,
   LogOut,
   Plus,
-  Bell
+  Bell,
+  Moon,
+  Sun
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useCurrentUser } from '../hooks/useData'
@@ -32,10 +34,19 @@ type NavItem = {
 export function Sidebar() {
   const navigate = useNavigate()
   const [collapsed, setCollapsed] = useState(true)
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    if (typeof document === 'undefined') return 'light'
+    return document.documentElement.classList.contains('dark') ? 'dark' : 'light'
+  })
   const { data: user } = useCurrentUser()
   const { data: unreadCount } = useUnreadNotificationCount()
 
   useRealtimeNotifications()
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', theme === 'dark')
+    localStorage.setItem('theme', theme)
+  }, [theme])
 
   const badgeText =
     unreadCount && unreadCount > 99 ? '99+' : unreadCount || 0
@@ -128,6 +139,20 @@ export function Sidebar() {
           </NavLink>
         ))}
       </nav>
+
+      <div className="px-4 pb-4">
+        <button
+          type="button"
+          onClick={() => setTheme(prev => (prev === 'dark' ? 'light' : 'dark'))}
+          className={`w-full flex items-center ${collapsed ? 'justify-center' : 'justify-between'} gap-2 px-3 py-2 rounded-lg text-sm font-medium border border-[#E0E0E1] bg-white text-[#5A5F5F] hover:bg-[#ECECED] transition-colors`}
+          title={theme === 'dark' ? 'Modo claro' : 'Modo oscuro'}
+        >
+          <span className="flex items-center gap-2">
+            {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            {!collapsed && (theme === 'dark' ? 'Modo claro' : 'Modo oscuro')}
+          </span>
+        </button>
+      </div>
 
       {/* User Section */}
       <div className="p-4 border-t border-[#E0E0E1]">

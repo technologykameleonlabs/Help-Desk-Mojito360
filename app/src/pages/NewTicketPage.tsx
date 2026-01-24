@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
@@ -72,6 +72,8 @@ export function NewTicketPage() {
   const {
     register,
     handleSubmit,
+    watch,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<TicketFormValues>({
     resolver: zodResolver(ticketSchema),
@@ -83,6 +85,17 @@ export function NewTicketPage() {
       channel: 'APP Tickets',
     }
   })
+
+  const selectedEntityId = watch('entity_id')
+  const assignedToValue = watch('assigned_to')
+
+  useEffect(() => {
+    if (!selectedEntityId || assignedToValue) return
+    const selectedEntity = entities?.find(entity => entity.id === selectedEntityId)
+    if (selectedEntity?.assigned_to) {
+      setValue('assigned_to', selectedEntity.assigned_to, { shouldDirty: true })
+    }
+  }, [assignedToValue, entities, selectedEntityId, setValue])
 
   const handleFileChange = (files: FileList | null) => {
     if (!files) return

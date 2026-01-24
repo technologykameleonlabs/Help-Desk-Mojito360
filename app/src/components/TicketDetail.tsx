@@ -19,6 +19,7 @@ import { useRealtimeComments } from '../hooks/useRealtime'
 import { MentionTextarea, extractMentions } from './MentionTextarea'
 import { useAttachments, useDeleteAttachment } from '../hooks/useAttachments'
 import { AttachmentList } from './FileUpload'
+import { ConfirmModal } from './ConfirmModal'
 import { supabase } from '../lib/supabase'
 
 import { 
@@ -116,6 +117,10 @@ export function TicketDetail() {
   const [awaitingRefresh, setAwaitingRefresh] = useState(false)
   const [pendingSaveMessage, setPendingSaveMessage] = useState<string | null>(null)
   const [nowTimestamp, setNowTimestamp] = useState(() => Date.now())
+  const [solutionModalOpen, setSolutionModalOpen] = useState(false)
+  const [solutionModalText, setSolutionModalText] = useState('')
+  const [solutionModalError, setSolutionModalError] = useState<string | null>(null)
+  const [pendingUpdates, setPendingUpdates] = useState<(Partial<Ticket> & { id: string }) | null>(null)
 
   const [draft, setDraft] = useState({
     stage: '' as TicketStage,
@@ -471,12 +476,50 @@ export function TicketDetail() {
     deleteAttachment.mutate({ id: attachment.id, storagePath: attachment.storage_path })
   }
 
+  const applyUpdates = async (updates: Partial<Ticket> & { id: string }) => {
+    setSaveMessage(null)
+    setPendingSaveMessage('Cambios guardados correctamente.')
+    setAwaitingRefresh(true)
+
+    if (Object.keys(updates).length > 1) {
+      await updateTicket.mutateAsync(updates)
+    }
+
+    const assignedChanged =
+      (draft.assigned_to || null) !== (ticket?.assigned_to || null)
+    const nextAssignee = draft.assigned_to || null
+
+    if (
+      assignedChanged &&
+      nextAssignee &&
+      nextAssignee !== currentUser?.id &&
+      ticket
+    ) {
+      const notificationIds = await createNotifications.mutateAsync([
+        {
+          user_id: nextAssignee,
+          ticket_id: ticket.id,
+          type: 'assignment',
+          triggered_by: currentUser?.id ?? null,
+          message: `Te asignaron el ticket #${ticket.ticket_ref}: ${ticket.title}`,
+        }
+      ])
+
+      await sendNotificationEmails(notificationIds)
+    }
+
+    if (labelsChanged && ticket) {
+      await updateTicketLabels.mutateAsync({
+        ticketId: ticket.id,
+        labelIds: selectedLabelIds,
+      })
+    }
+    setEditingFields(new Set())
+  }
+
   const handleApplyChanges = async () => {
     if (!hasChanges) return
     try {
-      setSaveMessage(null)
-      setPendingSaveMessage('Cambios guardados correctamente.')
-      setAwaitingRefresh(true)
       const updates: Partial<Ticket> & { id: string } = { id: ticket.id }
       if (draft.stage !== ticket.stage) updates.stage = draft.stage
       if (draft.priority !== ticket.priority) updates.priority = draft.priority
@@ -485,39 +528,15 @@ export function TicketDetail() {
       if ((draft.ticket_type || '') !== (ticket.ticket_type || '')) updates.ticket_type = draft.ticket_type || null
       if ((draft.application || '') !== (ticket.application || '')) updates.application = draft.application || null
 
-      if (Object.keys(updates).length > 1) {
-        await updateTicket.mutateAsync(updates)
+      if (draft.stage === 'pending_validation' && draft.stage !== ticket.stage) {
+        setPendingUpdates(updates)
+        setSolutionModalText(ticket.solution || '')
+        setSolutionModalError(null)
+        setSolutionModalOpen(true)
+        return
       }
 
-      const assignedChanged =
-        (draft.assigned_to || null) !== (ticket.assigned_to || null)
-      const nextAssignee = draft.assigned_to || null
-
-      if (
-        assignedChanged &&
-        nextAssignee &&
-        nextAssignee !== currentUser?.id
-      ) {
-        const notificationIds = await createNotifications.mutateAsync([
-          {
-            user_id: nextAssignee,
-            ticket_id: ticket.id,
-            type: 'assignment',
-            triggered_by: currentUser?.id ?? null,
-            message: `Te asignaron el ticket #${ticket.ticket_ref}: ${ticket.title}`,
-          }
-        ])
-
-        await sendNotificationEmails(notificationIds)
-      }
-
-      if (labelsChanged) {
-        await updateTicketLabels.mutateAsync({
-          ticketId: ticket.id,
-          labelIds: selectedLabelIds,
-        })
-      }
-      setEditingFields(new Set())
+      await applyUpdates(updates)
     } catch (e) {
       console.error(e)
       alert('No se pudo actualizar el ticket.')
@@ -969,7 +988,7 @@ export function TicketDetail() {
             )}
           </div>
 
-          {/* Solution (if any) */}
+          {/* Solución (solo lectura) */}
           {ticket.solution && (
             <div className="space-y-2">
               <h3 className="text-xs font-bold text-[#6353FF] uppercase tracking-widest">Solución</h3>
@@ -1248,6 +1267,67 @@ export function TicketDetail() {
           )}
         </div>
       )}
+
+      <ConfirmModal
+        open={solutionModalOpen}
+        title={`Confirmar cambio a ${STAGES.pending_validation.label}`}
+        description={
+          <div className="space-y-3">
+            <p className="text-sm text-[#5A5F5F]">
+              Debes ingresar el mensaje de solución para continuar.
+            </p>
+            <div className="space-y-2">
+              <label className="block text-xs font-semibold text-[#3F4444]">
+                Mensaje de solución
+              </label>
+              <textarea
+                value={solutionModalText}
+                onChange={(event) => {
+                  setSolutionModalText(event.target.value)
+                  if (solutionModalError) setSolutionModalError(null)
+                }}
+                rows={4}
+                placeholder="Describe la solución aplicada..."
+                className="w-full px-3 py-2 text-sm text-[#3F4444] bg-white border border-[#E0E0E1] rounded-xl outline-none focus:ring-1 focus:ring-[#6353FF] transition-all resize-none"
+              />
+              {solutionModalError && (
+                <div className="text-[11px] text-red-500">{solutionModalError}</div>
+              )}
+            </div>
+          </div>
+        }
+        confirmText="Aceptar"
+        cancelText="Cancelar"
+        isConfirming={isSaving}
+        disableClose={isSaving}
+        onCancel={() => {
+          if (!isSaving) {
+            setSolutionModalOpen(false)
+            setPendingUpdates(null)
+          }
+        }}
+        onConfirm={async () => {
+          if (!pendingUpdates) return
+          if (!solutionModalText.trim()) {
+            setSolutionModalError('Debes ingresar un mensaje de solución.')
+            return
+          }
+          setSolutionModalOpen(false)
+          try {
+            await applyUpdates({
+              ...pendingUpdates,
+              solution: solutionModalText.trim(),
+            })
+          } catch (error) {
+            console.error(error)
+            alert('No se pudo actualizar el ticket.')
+            setAwaitingRefresh(false)
+            setPendingSaveMessage(null)
+          } finally {
+            setPendingUpdates(null)
+          }
+        }}
+      />
     </div>
   )
 }
