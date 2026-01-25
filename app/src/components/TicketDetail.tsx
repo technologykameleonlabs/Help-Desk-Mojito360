@@ -324,12 +324,12 @@ export function TicketDetail() {
     return { label: 'Sin SLA', className: 'bg-[#F7F7F8] text-[#5A5F5F] border-[#E0E0E1]' }
   }, [ticketSlaStatus?.sla_status])
 
-  const pendingValidationSinceLabel = useMemo(() => {
+  const pendingValidationSinceSeconds = useMemo(() => {
     if (!ticket?.pending_validation_since) return null
     const date = new Date(ticket.pending_validation_since)
     if (Number.isNaN(date.getTime())) return null
-    return format(date, 'dd/MM/yyyy HH:mm', { locale: es })
-  }, [ticket?.pending_validation_since])
+    return Math.max(0, Math.floor((nowTimestamp - date.getTime()) / 1000))
+  }, [ticket?.pending_validation_since, nowTimestamp])
 
   const formatDuration = useCallback((totalSeconds: number) => {
     const safeSeconds = Math.max(0, Math.floor(totalSeconds))
@@ -989,14 +989,14 @@ export function TicketDetail() {
                         <span
                           className="font-semibold"
                           title={
-                            item.stage === 'pending_validation' && pendingValidationSinceLabel
-                              ? `Tiempo total en este estado (historial). pending_validation_since: ${pendingValidationSinceLabel}`
+                            item.stage === 'pending_validation' && pendingValidationSinceSeconds !== null
+                              ? `Tiempo total en este estado (historial). Tiempo desde pending_validation_since: ${formatDuration(pendingValidationSinceSeconds)}`
                               : undefined
                           }
                         >
                           {formatDuration(item.seconds)}
-                          {item.stage === 'pending_validation' && pendingValidationSinceLabel
-                            ? ` (desde ${pendingValidationSinceLabel})`
+                          {item.stage === 'pending_validation' && pendingValidationSinceSeconds !== null
+                            ? ` (${formatDuration(pendingValidationSinceSeconds)})`
                             : ''}
                         </span>
                       </div>
