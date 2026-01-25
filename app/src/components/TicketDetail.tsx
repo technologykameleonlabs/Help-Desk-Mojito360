@@ -324,6 +324,13 @@ export function TicketDetail() {
     return { label: 'Sin SLA', className: 'bg-[#F7F7F8] text-[#5A5F5F] border-[#E0E0E1]' }
   }, [ticketSlaStatus?.sla_status])
 
+  const pendingValidationSinceLabel = useMemo(() => {
+    if (!ticket?.pending_validation_since) return null
+    const date = new Date(ticket.pending_validation_since)
+    if (Number.isNaN(date.getTime())) return null
+    return format(date, 'dd/MM/yyyy HH:mm', { locale: es })
+  }, [ticket?.pending_validation_since])
+
   const formatDuration = useCallback((totalSeconds: number) => {
     const safeSeconds = Math.max(0, Math.floor(totalSeconds))
     const totalMinutes = Math.floor(safeSeconds / 60)
@@ -979,7 +986,19 @@ export function TicketDetail() {
                     {stageStats.items.map(item => (
                       <div key={item.stage} className="flex items-center justify-between px-3 py-2">
                         <span className="text-[#5A5F5F]">{STAGES[item.stage].label}</span>
-                        <span className="font-semibold">{formatDuration(item.seconds)}</span>
+                        <span
+                          className="font-semibold"
+                          title={
+                            item.stage === 'pending_validation' && pendingValidationSinceLabel
+                              ? `Tiempo total en este estado (historial). pending_validation_since: ${pendingValidationSinceLabel}`
+                              : undefined
+                          }
+                        >
+                          {formatDuration(item.seconds)}
+                          {item.stage === 'pending_validation' && pendingValidationSinceLabel
+                            ? ` (desde ${pendingValidationSinceLabel})`
+                            : ''}
+                        </span>
                       </div>
                     ))}
                   </div>
