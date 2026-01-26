@@ -2,6 +2,7 @@ import { useMemo, useState, useEffect, forwardRef, type CSSProperties } from 're
 import { useTickets, useUpdateTicket } from '../hooks/useData'
 import type { Ticket, TicketStage } from '../lib/supabase'
 import { STAGES, PRIORITIES } from '../lib/supabase'
+import { buildTicketGroups, type GroupByKey } from '../lib/ticketGrouping'
 import { User, Building2 } from 'lucide-react'
 import type { TicketFilters } from '../pages/DashboardPage'
 import { ConfirmModal } from './ConfirmModal'
@@ -156,9 +157,10 @@ function KanbanColumn({
 type KanbanBoardProps = {
   onTicketClick: (ticketId: string) => void
   filters: TicketFilters
+  groupBy: GroupByKey
 }
 
-export function KanbanBoard({ onTicketClick, filters }: KanbanBoardProps) {
+export function KanbanBoard({ onTicketClick, filters, groupBy }: KanbanBoardProps) {
   const { data: tickets, isLoading, isFetching } = useTickets(true)
   const updateTicket = useUpdateTicket()
   const [activeTicketId, setActiveTicketId] = useState<string | null>(null)
@@ -283,6 +285,17 @@ export function KanbanBoard({ onTicketClick, filters }: KanbanBoardProps) {
       return true
     })
   }, [tickets, filters])
+
+  const groupedTickets = useMemo(
+    () => buildTicketGroups(filteredTickets, groupBy),
+    [filteredTickets, groupBy]
+  )
+
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({})
+  const toggleGroup = (groupId: string) => {
+    setCollapsedGroups(prev => ({ ...prev, [groupId]: !prev[groupId] }))
+  }
+
   
   const ticketsByStage = useMemo(() => {
     const grouped: Record<TicketStage, Ticket[]> = {} as Record<TicketStage, Ticket[]>
@@ -352,6 +365,43 @@ export function KanbanBoard({ onTicketClick, filters }: KanbanBoardProps) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-[#8A8F8F]">Cargando tickets...</div>
+      </div>
+    )
+  }
+
+  if (groupBy !== 'none') {
+    return (
+      <div className="space-y-4">
+        {groupedTickets.map(group => {
+          const isCollapsed = collapsedGroups[group.id] ?? false
+          return (
+            <div key={group.id} className="rounded-xl border border-[#E0E0E1] bg-white">
+              <button
+                onClick={() => toggleGroup(group.id)}
+                className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+              >
+                <div className="flex items-center gap-2 text-sm font-semibold text-[#3F4444]">
+                  <span className={`transition-transform ${isCollapsed ? '-rotate-90' : 'rotate-0'}`}>{'>'}</span>
+                  <span>{group.label}</span>
+                </div>
+                <span className="rounded-full bg-[#F7F7F8] px-2 py-0.5 text-xs text-[#5A5F5F]">
+                  {group.tickets.length}
+                </span>
+              </button>
+              {!isCollapsed && (
+                <div className="grid gap-3 border-t border-[#E0E0E1] p-3 sm:grid-cols-2 xl:grid-cols-3">
+                  {group.tickets.map(ticket => (
+                    <TicketCard
+                      key={ticket.id}
+                      ticket={ticket}
+                      onClick={() => onTicketClick(ticket.id)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        })}
       </div>
     )
   }

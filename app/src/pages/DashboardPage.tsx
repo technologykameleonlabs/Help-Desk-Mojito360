@@ -11,6 +11,8 @@ import { useFilteredTickets } from '../hooks/useFilteredTickets'
 import { useCreateSavedView, useCurrentUser, useDeleteSavedView, useEntities, useProfiles, useSavedViews, useUpdateSavedView } from '../hooks/useData'
 import { STAGES, PRIORITIES } from '../lib/supabase'
 import { CATEGORY_OPTIONS } from '../lib/ticketOptions'
+import { GROUP_BY_OPTIONS, isGroupByKey, buildTicketGroups, type GroupByKey } from '../lib/ticketGrouping'
+import { SingleSelect } from '../components/SingleSelect'
 
 // Updated filters to support multi-select (arrays)
 export type TicketFilters = {
@@ -31,6 +33,7 @@ export type TicketFilters = {
 type SavedViewConfig = {
   filters: TicketFilters
   view: 'kanban' | 'list'
+  groupBy: GroupByKey
 }
 
 type ConfirmAction =
@@ -95,6 +98,7 @@ export function DashboardPage() {
   const { id } = useParams<{ id: string }>()
   const [view, setView] = useState<'kanban' | 'list'>('kanban')
   const [showFilters, setShowFilters] = useState(false)
+  const [groupBy, setGroupBy] = useState<GroupByKey>('none')
 
   const [filters, setFilters] = useState<TicketFilters>(DEFAULT_FILTERS)
   const [showSavedViews, setShowSavedViews] = useState(false)
@@ -172,7 +176,9 @@ export function DashboardPage() {
   const applySavedView = (config: Record<string, unknown>) => {
     const viewConfig = config as Partial<SavedViewConfig>
     const nextFilters = normalizeFilters(viewConfig.filters)
+    const nextGroupBy = isGroupByKey(viewConfig.groupBy) ? viewConfig.groupBy : 'none'
     setFilters(nextFilters)
+    setGroupBy(nextGroupBy)
     if (viewConfig.view === 'kanban' || viewConfig.view === 'list') {
       setView(viewConfig.view)
     }
@@ -197,7 +203,7 @@ export function DashboardPage() {
     }
 
     setSaveError(null)
-    const config: SavedViewConfig = { filters, view }
+    const config: SavedViewConfig = { filters, view, groupBy }
 
     try {
       if (editingViewId) {
@@ -333,12 +339,15 @@ export function DashboardPage() {
   // List View Content Component (uses useFilteredTickets)
   function ListViewContent({ 
     filters, 
-    onTicketClick 
+    onTicketClick,
+    groupBy
   }: { 
     filters: TicketFilters
     onTicketClick: (ticketId: string) => void 
+    groupBy: GroupByKey
   }) {
     const { tickets, allTickets, isLoading } = useFilteredTickets(filters, true)
+    const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({})
     
     if (isLoading) {
       return (
@@ -349,6 +358,15 @@ export function DashboardPage() {
     }
 
     const hasFilters = activeFilterCount > 0
+    const groupedTickets = useMemo(
+      () => buildTicketGroups(tickets, groupBy),
+      [tickets, groupBy]
+    )
+    const hasGrouping = groupBy !== 'none'
+
+    const toggleGroup = (groupId: string) => {
+      setCollapsedGroups(prev => ({ ...prev, [groupId]: !prev[groupId] }))
+    }
 
     return (
       <div>
@@ -357,7 +375,38 @@ export function DashboardPage() {
             Mostrando <span className="font-semibold text-[#3F4444]">{tickets.length}</span> de {allTickets.length} tickets
           </div>
         )}
-        <TicketList tickets={tickets} onTicketClick={onTicketClick} />
+        {hasGrouping ? (
+          <div className="space-y-4">
+            {groupedTickets.map(group => {
+              const isCollapsed = collapsedGroups[group.id] ?? false
+              return (
+                <div key={group.id} className="rounded-xl border border-[#E0E0E1] bg-white">
+                  <button
+                    onClick={() => toggleGroup(group.id)}
+                    className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+                  >
+                    <div className="flex items-center gap-2 text-sm font-semibold text-[#3F4444]">
+                      <ChevronDown
+                        className={`h-4 w-4 transition-transform ${isCollapsed ? '-rotate-90' : 'rotate-0'}`}
+                      />
+                      <span>{group.label}</span>
+                    </div>
+                    <span className="rounded-full bg-[#F7F7F8] px-2 py-0.5 text-xs text-[#5A5F5F]">
+                      {group.tickets.length}
+                    </span>
+                  </button>
+                  {!isCollapsed && (
+                    <div className="border-t border-[#E0E0E1] px-2 pb-3">
+                      <TicketList tickets={group.tickets} onTicketClick={onTicketClick} />
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        ) : (
+          <TicketList tickets={tickets} onTicketClick={onTicketClick} />
+        )}
       </div>
     )
   }
@@ -623,6 +672,15 @@ export function DashboardPage() {
                   </button>
                 )}
               
+                {/* Group By */}
+                <SingleSelect
+                  className="min-w-[220px]"
+                  prefix="Agrupar por"
+                  options={GROUP_BY_OPTIONS}
+                  value={groupBy}
+                  onChange={(value) => setGroupBy(value as GroupByKey)}
+                />
+
                 {/* View Toggle */}
                 <div className="flex items-center gap-1 border-l border-[#E0E0E1] pl-3">
                   <button
@@ -784,11 +842,13 @@ export function DashboardPage() {
               <KanbanBoard 
                 onTicketClick={handleTicketClick} 
                 filters={filters}
+                groupBy={groupBy}
               />
             ) : (
               <ListViewContent 
                 filters={filters}
                 onTicketClick={handleTicketClick}
+                groupBy={groupBy}
               />
             )}
           </div>
