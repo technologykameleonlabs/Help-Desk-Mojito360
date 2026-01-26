@@ -62,7 +62,7 @@ export function ArchivePage() {
   const { id } = useParams<{ id: string }>()
   const [view, setView] = useState<'kanban' | 'list'>('list') // Default to list for archive
   
-  const { data: allTickets, isLoading } = useTickets()
+  const { data: allTickets, isLoading } = useTickets(true)
   
   useRealtimeTickets()
   

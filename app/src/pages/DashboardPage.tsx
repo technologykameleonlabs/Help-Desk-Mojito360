@@ -338,7 +338,7 @@ export function DashboardPage() {
     filters: TicketFilters
     onTicketClick: (ticketId: string) => void 
   }) {
-    const { tickets, allTickets, isLoading } = useFilteredTickets(filters)
+    const { tickets, allTickets, isLoading } = useFilteredTickets(filters, true)
     
     if (isLoading) {
       return (

@@ -159,7 +159,7 @@ type KanbanBoardProps = {
 }
 
 export function KanbanBoard({ onTicketClick, filters }: KanbanBoardProps) {
-  const { data: tickets, isLoading, isFetching } = useTickets()
+  const { data: tickets, isLoading, isFetching } = useTickets(true)
   const updateTicket = useUpdateTicket()
   const [activeTicketId, setActiveTicketId] = useState<string | null>(null)
   const [pendingMove, setPendingMove] = useState<{
