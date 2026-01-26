@@ -25,14 +25,15 @@ export function useDeleteAttachment() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ id, storagePath }: { id: string; storagePath: string }) => {
-      // Delete from storage first
-      const { error: storageError } = await supabase.storage
-        .from('ticket-attachments')
-        .remove([storagePath])
+    mutationFn: async ({ id, storagePath }: { id: string; storagePath?: string | null }) => {
+      if (storagePath) {
+        // Delete from storage first
+        const { error: storageError } = await supabase.storage
+          .from('ticket-attachments')
+          .remove([storagePath])
 
-
-      if (storageError) console.warn('Storage delete error:', storageError)
+        if (storageError) console.warn('Storage delete error:', storageError)
+      }
 
       // Delete metadata from database
       const { error: dbError } = await supabase

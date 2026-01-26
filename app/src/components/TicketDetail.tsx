@@ -1,4 +1,5 @@
 import { useNavigate, useParams, useLocation } from 'react-router-dom'
+import DOMPurify from 'dompurify'
 import { 
   useTicket, 
   useUpdateTicket, 
@@ -382,6 +383,17 @@ export function TicketDetail() {
     if (!comments) return []
     return isClient ? comments.filter(comment => !comment.is_internal) : comments
   }, [comments, isClient])
+  const sanitizedDescription = useMemo(() => {
+    const raw = ticket?.description ?? ''
+    if (!raw) return ''
+    return DOMPurify.sanitize(raw, {
+      ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'u', 'ul', 'ol', 'li', 'a', 'img', 'span', 'div'],
+      ALLOWED_ATTR: ['href', 'target', 'rel', 'src', 'alt', 'title', 'style', 'width', 'height'],
+      ALLOW_DATA_ATTR: false,
+      FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed'],
+      ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto):)/i
+    })
+  }, [ticket?.description])
 
   if (isLoading) {
     return (
@@ -1001,9 +1013,16 @@ export function TicketDetail() {
           {/* Description */}
           <div className="space-y-2">
             <h3 className="text-xs font-bold text-[#8A8F8F] uppercase tracking-widest">Descripción</h3>
-            <div className="text-[#5A5F5F] text-sm leading-relaxed whitespace-pre-wrap">
-              {ticket.description || 'Sin descripción.'}
-            </div>
+            {sanitizedDescription ? (
+              <div
+                className="text-[#5A5F5F] text-sm leading-relaxed whitespace-pre-wrap [&_img]:max-w-full [&_img]:h-auto [&_img]:rounded-lg [&_img]:my-2 [&_a]:text-[#6353FF] [&_a]:underline [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5"
+                dangerouslySetInnerHTML={{ __html: sanitizedDescription }}
+              />
+            ) : (
+              <div className="text-[#5A5F5F] text-sm leading-relaxed whitespace-pre-wrap">
+                Sin descripción.
+              </div>
+            )}
           </div>
 
           {/* Attachments */}

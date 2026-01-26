@@ -11,9 +11,10 @@ export type Attachment = {
   comment_id: string | null
   uploaded_by: string
   file_name: string
-  file_size: number
-  file_type: string
-  storage_path: string
+  file_size?: number | null
+  file_type?: string | null
+  storage_path?: string | null
+  external_url?: string | null
   created_at: string
 }
 
@@ -25,15 +26,16 @@ type FileUploadProps = {
 }
 
 // Format file size
-function formatFileSize(bytes: number): string {
+function formatFileSize(bytes?: number | null): string {
+  if (bytes === null || bytes === undefined) return '—'
   if (bytes < 1024) return bytes + ' B'
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
 }
 
 // Get file icon based on MIME type
-function getFileIcon(mimeType: string) {
-  if (mimeType.startsWith('image/')) return Image
+function getFileIcon(mimeType?: string | null) {
+  if (mimeType?.startsWith('image/')) return Image
   return FileText
 }
 
@@ -157,6 +159,13 @@ export function AttachmentList({ attachments, onDelete, canDelete = false }: Att
   const handleDownload = async (attachment: Attachment) => {
     setDownloading(attachment.id)
     try {
+      if (attachment.external_url) {
+        window.open(attachment.external_url, '_blank', 'noopener,noreferrer')
+        return
+      }
+      if (!attachment.storage_path) {
+        throw new Error('Adjunto sin ruta de almacenamiento')
+      }
       const { data, error } = await supabase.storage
         .from('ticket-attachments')
         .download(attachment.storage_path)
@@ -199,7 +208,8 @@ export function AttachmentList({ attachments, onDelete, canDelete = false }: Att
     <div className="space-y-2">
       {attachments.map(attachment => {
         const FileIcon = getFileIcon(attachment.file_type)
-        const isImage = attachment.file_type.startsWith('image/')
+        const isImage = attachment.file_type?.startsWith('image/')
+        const downloadLabel = attachment.external_url ? 'Abrir' : 'Descargar'
         const allowDelete = typeof canDelete === 'function' ? canDelete(attachment) : canDelete
 
         return (
@@ -224,7 +234,7 @@ export function AttachmentList({ attachments, onDelete, canDelete = false }: Att
                 onClick={() => setConfirmAction({ type: 'download', attachment })}
                 disabled={downloading === attachment.id}
                 className="p-1.5 hover:bg-white rounded transition-colors text-[#8A8F8F] hover:text-[#6353FF]"
-                title="Descargar"
+                title={downloadLabel}
               >
                 {downloading === attachment.id ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -252,14 +262,22 @@ export function AttachmentList({ attachments, onDelete, canDelete = false }: Att
         title={
           confirmAction?.type === 'delete'
             ? 'Eliminar adjunto'
-            : 'Descargar adjunto'
+            : confirmAction?.attachment.external_url
+              ? 'Abrir adjunto'
+              : 'Descargar adjunto'
         }
         description={
           confirmAction
-            ? `¿Deseas ${confirmAction.type === 'delete' ? 'eliminar' : 'descargar'} "${confirmAction.attachment.file_name}"?`
+            ? `¿Deseas ${confirmAction.type === 'delete' ? 'eliminar' : (confirmAction.attachment.external_url ? 'abrir' : 'descargar')} "${confirmAction.attachment.file_name}"?`
             : undefined
         }
-        confirmText={confirmAction?.type === 'delete' ? 'Eliminar' : 'Descargar'}
+        confirmText={
+          confirmAction?.type === 'delete'
+            ? 'Eliminar'
+            : confirmAction?.attachment.external_url
+              ? 'Abrir'
+              : 'Descargar'
+        }
         onConfirm={handleConfirm}
         onCancel={() => setConfirmAction(null)}
         isConfirming={confirmAction?.type === 'download' && !!downloading}
