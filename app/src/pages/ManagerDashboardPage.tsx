@@ -385,6 +385,35 @@ export function ManagerDashboardPage() {
 
   const dayLabels = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 
+  const typologyMatrix = useMemo(() => {
+    const counts = new Map<string, number>()
+    filteredTicketsForMetrics.forEach(ticket => {
+      const type = ticket.ticket_type || 'Sin tipo'
+      counts.set(type, (counts.get(type) || 0) + 1)
+    })
+    return Array.from(counts.entries())
+      .map(([type, count]) => ({ type, count }))
+      .sort((a, b) => b.count - a.count)
+  }, [filteredTicketsForMetrics])
+
+  const labelMatrix = useMemo(() => {
+    const counts = new Map<string, number>()
+    filteredTicketsForMetrics.forEach(ticket => {
+      const ticketLabels = ticket.labels || []
+      if (ticketLabels.length === 0) {
+        counts.set('Sin etiqueta', (counts.get('Sin etiqueta') || 0) + 1)
+        return
+      }
+      ticketLabels.forEach(({ label }) => {
+        const name = label?.name || 'Sin etiqueta'
+        counts.set(name, (counts.get(name) || 0) + 1)
+      })
+    })
+    return Array.from(counts.entries())
+      .map(([label, count]) => ({ label, count }))
+      .sort((a, b) => b.count - a.count)
+  }, [filteredTicketsForMetrics])
+
   const handleExportExcel = () => {
     const summaryRows = [
       ['Total tickets', metricsData.totalTickets],
@@ -930,6 +959,62 @@ export function ManagerDashboardPage() {
                           )
                         })}
                       </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div className="border border-[#E0E0E1] rounded-xl p-4 space-y-3">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-[#3F4444]">
+                      <BarChart3 className="w-4 h-4" />
+                      Matriz de tipología (tipo de incidencia)
+                    </div>
+                    <div className="space-y-2">
+                      {typologyMatrix.length === 0 && (
+                        <div className="text-sm text-[#8A8F8F]">Sin datos.</div>
+                      )}
+                      {typologyMatrix.map(item => {
+                        const max = Math.max(...typologyMatrix.map(value => value.count), 1)
+                        const width = Math.round((item.count / max) * 100)
+                        return (
+                          <div key={item.type} className="space-y-1">
+                            <div className="flex items-center justify-between text-xs text-[#5A5F5F]">
+                              <span>{item.type}</span>
+                              <span className="font-semibold text-[#3F4444]">{item.count}</span>
+                            </div>
+                            <div className="h-2 bg-[#F7F7F8] rounded-full overflow-hidden">
+                              <div className="h-full bg-[#14B8A6]" style={{ width: `${width}%` }} />
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="border border-[#E0E0E1] rounded-xl p-4 space-y-3">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-[#3F4444]">
+                      <BarChart3 className="w-4 h-4" />
+                      Matriz de etiquetas (labels)
+                    </div>
+                    <div className="space-y-2">
+                      {labelMatrix.length === 0 && (
+                        <div className="text-sm text-[#8A8F8F]">Sin datos.</div>
+                      )}
+                      {labelMatrix.map(item => {
+                        const max = Math.max(...labelMatrix.map(value => value.count), 1)
+                        const width = Math.round((item.count / max) * 100)
+                        return (
+                          <div key={item.label} className="space-y-1">
+                            <div className="flex items-center justify-between text-xs text-[#5A5F5F]">
+                              <span>{item.label}</span>
+                              <span className="font-semibold text-[#3F4444]">{item.count}</span>
+                            </div>
+                            <div className="h-2 bg-[#F7F7F8] rounded-full overflow-hidden">
+                              <div className="h-full bg-[#6366F1]" style={{ width: `${width}%` }} />
+                            </div>
+                          </div>
+                        )
+                      })}
                     </div>
                   </div>
                 </div>
