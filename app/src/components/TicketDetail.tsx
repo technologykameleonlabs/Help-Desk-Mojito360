@@ -432,6 +432,31 @@ export function TicketDetail() {
         }
       }
 
+      const commentRecipients = new Set<string>()
+      if (ticket.assigned_to) {
+        commentRecipients.add(ticket.assigned_to)
+      }
+      if (ticket.entity?.assigned_to) {
+        commentRecipients.add(ticket.entity.assigned_to)
+      }
+      if (currentUser?.id) {
+        commentRecipients.delete(currentUser.id)
+      }
+      allMentions.forEach(userId => commentRecipients.delete(userId))
+
+      if (commentRecipients.size > 0) {
+        const notificationIds = await createNotifications.mutateAsync(
+          Array.from(commentRecipients).map(userId => ({
+            user_id: userId,
+            ticket_id: ticket.id,
+            type: 'new_comment',
+            triggered_by: currentUser?.id ?? null,
+            message: `Nuevo comentario en el ticket #${ticket.ticket_ref}: ${ticket.title}`,
+          }))
+        )
+        await sendNotificationEmails(notificationIds)
+      }
+
       if (result?.id) {
         await uploadCommentAttachments(result.id)
       }
@@ -492,9 +517,11 @@ export function TicketDetail() {
       await updateTicket.mutateAsync(updates)
     }
 
+    const resolvedAssignee =
+      (updates.assigned_to ?? draft.assigned_to) || null
     const assignedChanged =
-      (draft.assigned_to || null) !== (ticket?.assigned_to || null)
-    const nextAssignee = draft.assigned_to || null
+      resolvedAssignee !== (ticket?.assigned_to || null)
+    const nextAssignee = resolvedAssignee
 
     if (
       assignedChanged &&
@@ -509,6 +536,29 @@ export function TicketDetail() {
           type: 'assignment',
           triggered_by: currentUser?.id ?? null,
           message: `Te asignaron el ticket #${ticket.ticket_ref}: ${ticket.title}`,
+        }
+      ])
+
+      await sendNotificationEmails(notificationIds)
+    }
+
+    const previousResponsible = ticket?.entity?.assigned_to ?? null
+    const nextResponsible = selectedEntity?.assigned_to ?? null
+    const entityChanged = (draft.entity_id || null) !== (ticket?.entity_id || null)
+
+    if (
+      entityChanged &&
+      nextResponsible &&
+      nextResponsible !== currentUser?.id &&
+      nextResponsible !== previousResponsible
+    ) {
+      const notificationIds = await createNotifications.mutateAsync([
+        {
+          user_id: nextResponsible,
+          ticket_id: ticket.id,
+          type: 'assignment',
+          triggered_by: currentUser?.id ?? null,
+          message: `Te asignaron como responsable del ticket #${ticket.ticket_ref}: ${ticket.title}`,
         }
       ])
 
@@ -534,6 +584,15 @@ export function TicketDetail() {
       if ((draft.assigned_to || null) !== ticket.assigned_to) updates.assigned_to = draft.assigned_to || null
       if ((draft.ticket_type || '') !== (ticket.ticket_type || '')) updates.ticket_type = draft.ticket_type || null
       if ((draft.application || '') !== (ticket.application || '')) updates.application = draft.application || null
+
+      const shouldAutoAssign =
+        (!draft.assigned_to || draft.assigned_to.trim() === '') &&
+        selectedEntity?.assigned_to &&
+        selectedEntity.assigned_to !== ticket.assigned_to
+
+      if (shouldAutoAssign) {
+        updates.assigned_to = selectedEntity.assigned_to
+      }
 
       if (draft.stage === 'pending_validation' && draft.stage !== ticket.stage) {
         setPendingUpdates(updates)

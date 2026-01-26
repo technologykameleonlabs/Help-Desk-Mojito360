@@ -16,6 +16,7 @@ import type { TicketStage } from '../lib/supabase'
 import { MultiSelect } from '../components/MultiSelect'
 import { CATEGORY_OPTIONS } from '../lib/ticketOptions'
 import { supabase } from '../lib/supabase'
+import { sendNotificationEmails, useCreateNotifications } from '../hooks/useNotifications'
 
 
 const ticketSchema = z.object({
@@ -62,6 +63,7 @@ export function NewTicketPage() {
   const { data: profiles } = useProfiles()
   const { data: labels } = useLabels()
   const createTicket = useCreateTicket()
+  const createNotifications = useCreateNotifications()
   const updateTicketLabels = useUpdateTicketLabels()
   const [selectedLabels, setSelectedLabels] = useState<string[]>([])
   const [pendingFiles, setPendingFiles] = useState<File[]>([])
@@ -171,10 +173,46 @@ export function NewTicketPage() {
 
   const onSubmit = async (values: TicketFormValues) => {
     try {
+      const { data: { user } } = await supabase.auth.getUser()
       const created = await createTicket.mutateAsync({
         ...values,
         stage: 'new' as TicketStage,
       })
+
+      const selectedEntity = entities?.find(entity => entity.id === values.entity_id)
+      const assigneeId = created.assigned_to || null
+      const responsibleId = selectedEntity?.assigned_to || null
+      const currentUserId = user?.id ?? null
+
+      const notificationsMap = new Map<string, string>()
+      if (assigneeId && assigneeId !== currentUserId) {
+        notificationsMap.set(
+          assigneeId,
+          `Te asignaron el ticket #${created.ticket_ref}: ${created.title}`
+        )
+      }
+      if (responsibleId && responsibleId !== currentUserId) {
+        if (!notificationsMap.has(responsibleId)) {
+          notificationsMap.set(
+            responsibleId,
+            `Eres responsable del ticket #${created.ticket_ref}: ${created.title}`
+          )
+        }
+      }
+
+      if (notificationsMap.size > 0) {
+        const notificationIds = await createNotifications.mutateAsync(
+          Array.from(notificationsMap.entries()).map(([userId, message]) => ({
+            user_id: userId,
+            ticket_id: created.id,
+            type: 'assignment',
+            triggered_by: currentUserId,
+            message,
+          }))
+        )
+        await sendNotificationEmails(notificationIds)
+      }
+
       await uploadTicketAttachments(created.id)
       if (selectedLabels.length > 0) {
         await updateTicketLabels.mutateAsync({
