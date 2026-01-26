@@ -4,10 +4,11 @@ import { MultiSelect } from '../components/MultiSelect'
 import { BarChart3, Download, Loader2, PieChart, LineChart, Filter } from 'lucide-react'
 import { useEntities, useTicketCommentsSummary, useTicketSlaStatuses, useTicketStageHistoryByTicketIds } from '../hooks/useData'
 import { useFilteredTickets } from '../hooks/useFilteredTickets'
-import { STAGES } from '../lib/supabase'
+import { STAGES, PRIORITIES } from '../lib/supabase'
 import * as XLSX from 'xlsx'
 import { jsPDF } from 'jspdf'
 import type { TicketFilters } from './DashboardPage'
+import type { TicketStageHistory } from '../lib/supabase'
 
 const APPLICATIONS = ['Mojito360', 'Wintruck', 'Odoo', 'Otros']
 const APPLICATION_OPTIONS = APPLICATIONS.map(app => ({ value: app, label: app }))
@@ -53,6 +54,21 @@ export function ManagerDashboardPage() {
     .replace(/[^\x20-\x7E]/g, '')
     .replace(/\s{2,}/g, ' ')
     .trim()
+
+  const dateRange = useMemo(() => {
+    const start = filters.dateFrom ? new Date(`${filters.dateFrom}T00:00:00`) : null
+    const end = filters.dateTo ? new Date(`${filters.dateTo}T23:59:59`) : null
+    return { start, end }
+  }, [filters.dateFrom, filters.dateTo])
+
+  const isWithinRange = (dateString?: string | null) => {
+    if (!dateString) return false
+    const value = new Date(dateString).getTime()
+    if (Number.isNaN(value)) return false
+    if (dateRange.start && value < dateRange.start.getTime()) return false
+    if (dateRange.end && value > dateRange.end.getTime()) return false
+    return true
+  }
 
   const metricsData = useMemo(() => {
     const tickets = filteredTicketsForMetrics
@@ -167,33 +183,207 @@ export function ManagerDashboardPage() {
     }
   }, [filteredTicketsForMetrics, stageHistory, commentsSummary, slaStatuses])
 
+  const advancedMetrics = useMemo(() => {
+    const tickets = filteredTicketsForMetrics
+    const historyByTicket = new Map<string, TicketStageHistory[]>()
+    stageHistory?.forEach(entry => {
+      if (!historyByTicket.has(entry.ticket_id)) {
+        historyByTicket.set(entry.ticket_id, [])
+      }
+      historyByTicket.get(entry.ticket_id)!.push(entry)
+    })
+    historyByTicket.forEach(entries => {
+      entries.sort((a, b) => new Date(a.started_at).getTime() - new Date(b.started_at).getTime())
+    })
+
+    const reopenedTickets = new Set<string>()
+    historyByTicket.forEach(entries => {
+      for (let i = 1; i < entries.length; i += 1) {
+        const prev = entries[i - 1]
+        const current = entries[i]
+        if (prev.stage === 'done' && current.stage !== 'done' && current.stage !== 'cancelled') {
+          if (isWithinRange(current.started_at)) {
+            reopenedTickets.add(current.ticket_id)
+          }
+        }
+      }
+    })
+
+    const closedTicketsInRange = tickets.filter(ticket => isWithinRange(ticket.closed_at ?? null))
+    const closedCount = closedTicketsInRange.length
+    const reopenedCount = reopenedTickets.size
+    const reopenRatePct = closedCount > 0 ? Math.round((reopenedCount / closedCount) * 100) : 0
+
+    const commentByTicket = new Map<string, Array<{ user_id: string; created_at: string; is_internal: boolean }>>()
+    commentsSummary?.forEach(comment => {
+      if (!commentByTicket.has(comment.ticket_id)) {
+        commentByTicket.set(comment.ticket_id, [])
+      }
+      commentByTicket.get(comment.ticket_id)!.push(comment)
+    })
+
+    let fcrCount = 0
+    let resolvedCount = 0
+    tickets.forEach(ticket => {
+      if (!isWithinRange(ticket.closed_at ?? null)) return
+      resolvedCount += 1
+      const ticketComments = (commentByTicket.get(ticket.id) || [])
+        .filter(comment => !comment.is_internal && comment.user_id !== ticket.created_by)
+      if (ticketComments.length === 1) {
+        fcrCount += 1
+      }
+    })
+
+    const fcrRatePct = resolvedCount > 0 ? Math.round((fcrCount / resolvedCount) * 100) : 0
+
+    return {
+      reopenRatePct,
+      reopenedCount,
+      closedCount,
+      fcrRatePct,
+      fcrCount,
+      resolvedCount,
+    }
+  }, [filteredTicketsForMetrics, stageHistory, commentsSummary, isWithinRange])
+
   const slaTotal = metricsData.slaCounts.onTime + metricsData.slaCounts.risk + metricsData.slaCounts.overdue
   const slaOnTimePercent = slaTotal > 0 ? Math.round((metricsData.slaCounts.onTime / slaTotal) * 100) : 0
   const slaOverduePercent = slaTotal > 0 ? Math.round((metricsData.slaCounts.overdue / slaTotal) * 100) : 0
 
   const trendData = useMemo(() => {
     const tickets = filteredTicketsForMetrics
-    const startDate = filters.dateFrom ? new Date(`${filters.dateFrom}T00:00:00`) : null
-    const endDate = filters.dateTo ? new Date(`${filters.dateTo}T23:59:59`) : null
     const defaultDays = 14
+    const end = dateRange.end ?? new Date()
+    const start = dateRange.start ?? new Date(end.getTime() - (defaultDays - 1) * 86400000)
 
-    const end = endDate ?? new Date()
-    const start = startDate ?? new Date(end.getTime() - (defaultDays - 1) * 86400000)
-    const days: Array<{ label: string; count: number; dateKey: string }> = []
+    const days: Array<{ label: string; dateKey: string; created: number; resolved: number }> = []
     for (let i = 0; i <= Math.max(0, Math.round((end.getTime() - start.getTime()) / 86400000)); i += 1) {
       const day = new Date(start.getTime() + i * 86400000)
       const key = day.toISOString().slice(0, 10)
-      days.push({ label: day.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }), count: 0, dateKey: key })
+      days.push({
+        label: day.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }),
+        dateKey: key,
+        created: 0,
+        resolved: 0,
+      })
     }
 
+    const byDate = new Map(days.map(item => [item.dateKey, item]))
     tickets.forEach(ticket => {
-      const key = new Date(ticket.created_at).toISOString().slice(0, 10)
-      const bucket = days.find(item => item.dateKey === key)
-      if (bucket) bucket.count += 1
+      const createdKey = new Date(ticket.created_at).toISOString().slice(0, 10)
+      const createdBucket = byDate.get(createdKey)
+      if (createdBucket) createdBucket.created += 1
+      if (ticket.closed_at) {
+        const resolvedKey = new Date(ticket.closed_at).toISOString().slice(0, 10)
+        const resolvedBucket = byDate.get(resolvedKey)
+        if (resolvedBucket) resolvedBucket.resolved += 1
+      }
     })
 
     return days
-  }, [filteredTicketsForMetrics, filters.dateFrom, filters.dateTo])
+  }, [filteredTicketsForMetrics, dateRange.end, dateRange.start])
+
+  const resolutionHistogram = useMemo(() => {
+    const buckets = [
+      { label: '< 1 día', count: 0 },
+      { label: '1-2 días', count: 0 },
+      { label: '3-5 días', count: 0 },
+      { label: '5-7 días', count: 0 },
+      { label: '> 1 semana', count: 0 },
+    ]
+
+    filteredTicketsForMetrics.forEach(ticket => {
+      if (!ticket.closed_at) return
+      const diffDays = (new Date(ticket.closed_at).getTime() - new Date(ticket.created_at).getTime()) / 86400000
+      if (!Number.isFinite(diffDays) || diffDays < 0) return
+      if (diffDays < 1) buckets[0].count += 1
+      else if (diffDays < 2) buckets[1].count += 1
+      else if (diffDays < 5) buckets[2].count += 1
+      else if (diffDays < 7) buckets[3].count += 1
+      else buckets[4].count += 1
+    })
+
+    return buckets
+  }, [filteredTicketsForMetrics])
+
+  const agingBuckets = useMemo(() => {
+    const buckets = [
+      { label: '0-24h', count: 0 },
+      { label: '1-2 días', count: 0 },
+      { label: '2-5 días', count: 0 },
+      { label: '5-10 días', count: 0 },
+      { label: 'Más de 10 días', count: 0 },
+    ]
+
+    filteredTicketsForMetrics.forEach(ticket => {
+      if (ticket.stage === 'done' || ticket.stage === 'cancelled') return
+      const diffDays = (Date.now() - new Date(ticket.created_at).getTime()) / 86400000
+      if (!Number.isFinite(diffDays) || diffDays < 0) return
+      if (diffDays < 1) buckets[0].count += 1
+      else if (diffDays < 2) buckets[1].count += 1
+      else if (diffDays < 5) buckets[2].count += 1
+      else if (diffDays < 10) buckets[3].count += 1
+      else buckets[4].count += 1
+    })
+
+    return buckets
+  }, [filteredTicketsForMetrics])
+
+  const backlogByPriority = useMemo(() => {
+    const counts = new Map<string, number>()
+    filteredTicketsForMetrics.forEach(ticket => {
+      if (ticket.stage === 'done' || ticket.stage === 'cancelled') return
+      const key = ticket.priority || 'medium'
+      counts.set(key, (counts.get(key) || 0) + 1)
+    })
+    return Array.from(counts.entries()).map(([priority, count]) => ({ priority, count }))
+  }, [filteredTicketsForMetrics])
+
+  const backlogPie = useMemo(() => {
+    const priorityOrder = ['critical', 'high', 'medium', 'low']
+    const colors: Record<string, string> = {
+      critical: '#EF4444',
+      high: '#F59E0B',
+      medium: '#3B82F6',
+      low: '#6B7280',
+    }
+    const sorted = [...backlogByPriority].sort((a, b) =>
+      priorityOrder.indexOf(a.priority) - priorityOrder.indexOf(b.priority)
+    )
+    const total = sorted.reduce((sum, item) => sum + item.count, 0)
+    if (total === 0) {
+      return { total, gradient: 'conic-gradient(#E5E7EB 0 100%)', slices: [] }
+    }
+    let current = 0
+    const slices = sorted.map(item => {
+      const percent = (item.count / total) * 100
+      const start = current
+      const end = current + percent
+      current = end
+      return {
+        ...item,
+        percent,
+        color: colors[item.priority] || '#9CA3AF',
+        range: `${start}% ${end}%`,
+      }
+    })
+    const gradient = `conic-gradient(${slices.map(slice => `${slice.color} ${slice.range}`).join(', ')})`
+    return { total, gradient, slices }
+  }, [backlogByPriority])
+
+  const heatmapData = useMemo(() => {
+    const matrix = Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => 0))
+    filteredTicketsForMetrics.forEach(ticket => {
+      const date = new Date(ticket.created_at)
+      if (Number.isNaN(date.getTime())) return
+      const day = date.getDay()
+      const hour = date.getHours()
+      matrix[day][hour] += 1
+    })
+    return matrix
+  }, [filteredTicketsForMetrics])
+
+  const dayLabels = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 
   const handleExportExcel = () => {
     const summaryRows = [
@@ -201,6 +391,9 @@ export function ManagerDashboardPage() {
       ['Resueltos', metricsData.resolvedCount],
       ['Prom. primera respuesta', formatMinutes(metricsData.avgFirstResponse)],
       ['Prom. resolución', formatMinutes(metricsData.avgResolution)],
+      ['Tasa reapertura', `${advancedMetrics.reopenRatePct}%`],
+      ['Reaperturas', advancedMetrics.reopenedCount],
+      ['FCR', `${advancedMetrics.fcrRatePct}%`],
       ['SLA en tiempo', metricsData.slaCounts.onTime],
       ['SLA en riesgo', metricsData.slaCounts.risk],
       ['SLA vencidos', metricsData.slaCounts.overdue],
@@ -218,8 +411,16 @@ export function ManagerDashboardPage() {
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(metricsData.topEntities), 'Top Entidades')
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(trendData.map(item => ({
       fecha: item.dateKey,
-      tickets: item.count,
+      creados: item.created,
+      resueltos: item.resolved,
     }))), 'Tendencia')
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(resolutionHistogram), 'Histograma Resolución')
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(agingBuckets), 'Aging Backlog')
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(backlogByPriority), 'Backlog Prioridad')
+    const heatmapRows = heatmapData.flatMap((hours, dayIndex) =>
+      hours.map((count, hour) => ({ dia: dayIndex, hora: hour, tickets: count }))
+    )
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(heatmapRows), 'Heatmap')
     XLSX.writeFile(wb, 'dashboard_reportes.xlsx')
   }
 
@@ -230,6 +431,8 @@ export function ManagerDashboardPage() {
       ['Resueltos', String(metricsData.resolvedCount)],
       ['Prom. primera respuesta', formatMinutes(metricsData.avgFirstResponse)],
       ['Prom. resolución', formatMinutes(metricsData.avgResolution)],
+      ['Tasa reapertura', `${advancedMetrics.reopenRatePct}%`],
+      ['FCR', `${advancedMetrics.fcrRatePct}%`],
       ['SLA en tiempo', String(metricsData.slaCounts.onTime)],
       ['SLA en riesgo', String(metricsData.slaCounts.risk)],
       ['SLA vencidos', String(metricsData.slaCounts.overdue)],
@@ -383,7 +586,7 @@ export function ManagerDashboardPage() {
               </div>
             ) : (
               <>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
                   <div className="border border-[#E0E0E1] rounded-xl p-4">
                     <div className="text-[11px] text-[#8A8F8F] uppercase tracking-wider">Tickets totales</div>
                     <div className="text-2xl font-semibold text-[#3F4444]">{metricsData.totalTickets}</div>
@@ -399,6 +602,16 @@ export function ManagerDashboardPage() {
                   <div className="border border-[#E0E0E1] rounded-xl p-4">
                     <div className="text-[11px] text-[#8A8F8F] uppercase tracking-wider">Prom. resolución</div>
                     <div className="text-2xl font-semibold text-[#3F4444]">{formatMinutes(metricsData.avgResolution)}</div>
+                  </div>
+                  <div className="border border-[#E0E0E1] rounded-xl p-4">
+                    <div className="text-[11px] text-[#8A8F8F] uppercase tracking-wider">Tasa reapertura</div>
+                    <div className="text-2xl font-semibold text-[#3F4444]">{advancedMetrics.reopenRatePct}%</div>
+                    <div className="text-xs text-[#8A8F8F]">{advancedMetrics.reopenedCount} de {advancedMetrics.closedCount}</div>
+                  </div>
+                  <div className="border border-[#E0E0E1] rounded-xl p-4">
+                    <div className="text-[11px] text-[#8A8F8F] uppercase tracking-wider">FCR</div>
+                    <div className="text-2xl font-semibold text-[#3F4444]">{advancedMetrics.fcrRatePct}%</div>
+                    <div className="text-xs text-[#8A8F8F]">{advancedMetrics.fcrCount} de {advancedMetrics.resolvedCount}</div>
                   </div>
                 </div>
 
@@ -542,38 +755,181 @@ export function ManagerDashboardPage() {
                   <div className="border border-[#E0E0E1] rounded-xl p-4 space-y-3">
                     <div className="flex items-center gap-2 text-sm font-semibold text-[#3F4444]">
                       <LineChart className="w-4 h-4" />
-                      Tendencia de tickets creados
+                      Tendencia de backlog (creados vs resueltos)
                     </div>
                     <div className="h-32">
                       <svg viewBox="0 0 300 120" className="w-full h-full">
                         {(() => {
-                          const max = Math.max(...trendData.map(item => item.count), 1)
-                          const points = trendData.map((item, index) => {
+                          const max = Math.max(
+                            ...trendData.map(item => Math.max(item.created, item.resolved)),
+                            1
+                          )
+                          const createdPoints = trendData.map((item, index) => {
                             const x = (index / Math.max(trendData.length - 1, 1)) * 280 + 10
-                            const y = 100 - (item.count / max) * 80 + 10
+                            const y = 100 - (item.created / max) * 80 + 10
+                            return `${x},${y}`
+                          }).join(' ')
+                          const resolvedPoints = trendData.map((item, index) => {
+                            const x = (index / Math.max(trendData.length - 1, 1)) * 280 + 10
+                            const y = 100 - (item.resolved / max) * 80 + 10
                             return `${x},${y}`
                           }).join(' ')
                           return (
                             <>
                               <polyline
-                                points={points}
+                                points={createdPoints}
                                 fill="none"
                                 stroke="#6353FF"
                                 strokeWidth="2"
                               />
+                              <polyline
+                                points={resolvedPoints}
+                                fill="none"
+                                stroke="#10B981"
+                                strokeWidth="2"
+                              />
                               {trendData.map((item, index) => {
                                 const x = (index / Math.max(trendData.length - 1, 1)) * 280 + 10
-                                const y = 100 - (item.count / max) * 80 + 10
+                                const y = 100 - (item.created / max) * 80 + 10
                                 return <circle key={item.dateKey} cx={x} cy={y} r="3" fill="#6353FF" />
+                              })}
+                              {trendData.map((item, index) => {
+                                const x = (index / Math.max(trendData.length - 1, 1)) * 280 + 10
+                                const y = 100 - (item.resolved / max) * 80 + 10
+                                return <circle key={`${item.dateKey}-resolved`} cx={x} cy={y} r="3" fill="#10B981" />
                               })}
                             </>
                           )
                         })()}
                       </svg>
                     </div>
+                    <div className="flex items-center gap-4 text-xs text-[#5A5F5F]">
+                      <div className="flex items-center gap-1">
+                        <span className="inline-block w-2 h-2 rounded-full bg-[#6353FF]" />
+                        Creados
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="inline-block w-2 h-2 rounded-full bg-[#10B981]" />
+                        Resueltos
+                      </div>
+                    </div>
                     <div className="flex items-center justify-between text-[10px] text-[#8A8F8F]">
                       <span>{trendData[0]?.label || ''}</span>
                       <span>{trendData[trendData.length - 1]?.label || ''}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div className="border border-[#E0E0E1] rounded-xl p-4 space-y-3">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-[#3F4444]">
+                      <BarChart3 className="w-4 h-4" />
+                      Mapa de calor (día vs hora)
+                    </div>
+                    <div className="overflow-auto">
+                      <div className="grid grid-cols-[40px_repeat(24,minmax(12px,1fr))] gap-1 text-[10px]">
+                        <div />
+                        {Array.from({ length: 24 }, (_, hour) => (
+                          <div key={`hour-${hour}`} className="text-center text-[#8A8F8F]">{hour}</div>
+                        ))}
+                        {heatmapData.map((hours, dayIndex) => {
+                          const max = Math.max(...heatmapData.flat(), 1)
+                          return (
+                            <div key={`day-${dayIndex}`} className="contents">
+                              <div className="text-[#8A8F8F]">{dayLabels[dayIndex]}</div>
+                              {hours.map((count, hour) => {
+                                const intensity = count / max
+                                const background = `rgba(99, 83, 255, ${Math.max(0.05, intensity)})`
+                                return (
+                                  <div
+                                    key={`cell-${dayIndex}-${hour}`}
+                                    title={`${dayLabels[dayIndex]} ${hour}:00 - ${count} tickets`}
+                                    className="h-5 rounded"
+                                    style={{ background }}
+                                  />
+                                )
+                              })}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="border border-[#E0E0E1] rounded-xl p-4 space-y-3">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-[#3F4444]">
+                      <BarChart3 className="w-4 h-4" />
+                      Histograma de tiempos de solución
+                    </div>
+                    <div className="space-y-2">
+                      {resolutionHistogram.map(bucket => {
+                        const max = Math.max(...resolutionHistogram.map(item => item.count), 1)
+                        const width = Math.round((bucket.count / max) * 100)
+                        return (
+                          <div key={bucket.label} className="space-y-1">
+                            <div className="flex items-center justify-between text-xs text-[#5A5F5F]">
+                              <span>{bucket.label}</span>
+                              <span className="font-semibold text-[#3F4444]">{bucket.count}</span>
+                            </div>
+                            <div className="h-2 bg-[#F7F7F8] rounded-full overflow-hidden">
+                              <div className="h-full bg-[#7C3AED]" style={{ width: `${width}%` }} />
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div className="border border-[#E0E0E1] rounded-xl p-4 space-y-3">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-[#3F4444]">
+                      <BarChart3 className="w-4 h-4" />
+                      Edad del backlog (tickets abiertos)
+                    </div>
+                    <div className="space-y-2">
+                      {agingBuckets.map(bucket => {
+                        const max = Math.max(...agingBuckets.map(item => item.count), 1)
+                        const width = Math.round((bucket.count / max) * 100)
+                        return (
+                          <div key={bucket.label} className="space-y-1">
+                            <div className="flex items-center justify-between text-xs text-[#5A5F5F]">
+                              <span>{bucket.label}</span>
+                              <span className="font-semibold text-[#3F4444]">{bucket.count}</span>
+                            </div>
+                            <div className="h-2 bg-[#F7F7F8] rounded-full overflow-hidden">
+                              <div className="h-full bg-[#F97316]" style={{ width: `${width}%` }} />
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="border border-[#E0E0E1] rounded-xl p-4 space-y-3">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-[#3F4444]">
+                      <PieChart className="w-4 h-4" />
+                      Composición del backlog (prioridad)
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div
+                        className="w-24 h-24 rounded-full"
+                        style={{ background: backlogPie.gradient }}
+                      />
+                      <div className="text-sm text-[#5A5F5F] space-y-1">
+                        {backlogPie.slices.length === 0 && (
+                          <div className="text-sm text-[#8A8F8F]">Sin datos.</div>
+                        )}
+                        {backlogPie.slices.map(slice => {
+                          const label = PRIORITIES[slice.priority as keyof typeof PRIORITIES]?.label || slice.priority
+                          return (
+                            <div key={slice.priority} className="flex items-center gap-2">
+                              <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ background: slice.color }} />
+                              <span>{label}: <strong className="text-[#3F4444]">{slice.count}</strong></span>
+                            </div>
+                          )
+                        })}
+                      </div>
                     </div>
                   </div>
                 </div>

@@ -83,6 +83,7 @@ export type Ticket = {
   solution: string | null
   pending_validation_since?: string | null
   last_client_activity_at?: string | null
+  closed_at?: string | null
   created_at: string
   updated_at: string
   // Relations (populated by joins)
@@ -139,6 +140,7 @@ export type AppSettings = {
   id: number
   auto_close_pending_validation_hours: number
   system_user_id: string | null
+  reopen_window_days?: number | null
   updated_at: string
 }
 

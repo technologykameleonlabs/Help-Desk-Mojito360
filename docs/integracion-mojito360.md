@@ -33,19 +33,26 @@ Este documento describe la integracion entre Mojito360 y el Help Desk, las Edge 
 
 ### 2) mojito-send
 
-**Proposito**: Envia actualizaciones de ticket hacia Mojito360 usando OAuth client_credentials.
+**Proposito**: Envia actualizaciones de ticket hacia Mojito360 usando OAuth client_credentials (cierre bidireccional).
 
 **Entrada** (JSON):
 ```json
 {
-  "external_ref": "string",
-  "title": "string",
-  "description": "string",
-  "status": "string"
+  "ticket_id": "uuid (opcional)",
+  "external_ref": "string (opcional)",
+  "status": "string (opcional)",
+  "stage": "string (opcional)",
+  "title": "string (opcional)",
+  "description": "string (opcional)"
 }
 ```
 
-**Salida**: `{ "ok": true }` o error 500 si falla token o llamada a Mojito.
+**Notas**:
+- Si envias `ticket_id`, el function buscara `external_ref` en `tickets`.
+- Si envias `stage`, se mapea a estado Mojito (ej: `done` -> `completed`).
+- `mojito-send` reenvia el header `X-Origin` para evitar bucles.
+
+**Salida**: `{ "ok": true, "external_ref": "...", "status": "..." }` o error 500 si falla token o llamada a Mojito.
 
 **Variables de entorno**:
 - `MOJITO_TOKEN_URL`
@@ -53,6 +60,7 @@ Este documento describe la integracion entre Mojito360 y el Help Desk, las Edge 
 - `MOJITO_CLIENT_SECRET`
 - `MOJITO_SCOPE` (opcional)
 - `MOJITO_API_BASE_URL`
+- `MOJITO_API_UPDATE_PATH` (opcional, default `/tickets/update`)
 
 ---
 
@@ -61,6 +69,9 @@ Este documento describe la integracion entre Mojito360 y el Help Desk, las Edge 
 **Proposito**: Recibe webhooks de Mojito360 y crea/actualiza tickets en Supabase.
 
 **Auth**: Header `Authorization: Bearer <MOJITO_WEBHOOK_SECRET>`.
+**Antibucle**:
+- Si recibe `X-Origin: HelpDesk`, ignora la actualizacion.
+- Ademas, el webhook marca `skip_mojito_sync = true` para que el trigger local no reenvie el cambio a Mojito.
 
 **Entrada** (JSON, ejemplo):
 ```json
@@ -75,6 +86,10 @@ Este documento describe la integracion entre Mojito360 y el Help Desk, las Edge 
   "Subcategory": "subcat",
   "Company": "Demo",
   "User": "david@kameleonlabs.ai",
+  "UserEmail": "david@kameleonlabs.ai",
+  "MessageAuthorEmail": "cliente@empresa.com",
+  "MessageBody": "Nuevo comentario del cliente",
+  "MessageIsPublic": true,
   "Attachments": [
     "https://mojitoprestorage.blob.core.windows.net/support/952/1769436740759/requisitos-tickets%20(4).xlsx"
   ]
@@ -105,6 +120,12 @@ Este documento describe la integracion entre Mojito360 y el Help Desk, las Edge 
 **Adjuntos externos**:
 - Si viene `Attachments`/`attachments`, se insertan en `public.attachments` con `external_url`.
 - `storage_path` queda `null` (no se sube a Storage).
+
+**Reapertura automatica por interaccion del cliente**:
+- Mojito enviara el comentario en el mismo webhook e incluye `MessageAuthorEmail`.
+- Si el ticket esta `done` y el autor del mensaje coincide con el email del creador (`created_by_email`):
+  - Si esta dentro de la ventana de seguridad (`app_settings.reopen_window_days`), el ticket cambia a `assigned`.
+  - Si esta fuera de la ventana, se crea un nuevo ticket con referencia al anterior en la descripcion.
 
 ---
 
