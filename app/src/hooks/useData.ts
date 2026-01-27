@@ -773,6 +773,32 @@ export function useUpdateEntities() {
   })
 }
 
+export function useCreateEntity() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (entity: Pick<Entity, 'name'> & Partial<Pick<Entity, 'status' | 'usage' | 'assigned_to' | 'external_id'>>) => {
+      const { data, error } = await supabase
+        .from('entities')
+        .insert({
+          name: entity.name,
+          external_id: entity.external_id ?? null,
+          status: entity.status ?? 'active',
+          usage: entity.usage ?? null,
+          assigned_to: entity.assigned_to ?? null,
+        })
+        .select()
+        .single()
+
+      if (error) throw error
+      return data as Entity
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['entities'] })
+    }
+  })
+}
+
 // Profiles (users)
 export function useProfiles() {
   return useQuery({

@@ -6,6 +6,8 @@ type ConfirmModalProps = {
   description?: ReactNode
   confirmText?: string
   cancelText?: string
+  /** Texto del botón de confirmar mientras está en curso (ej. "Eliminando...") */
+  confirmingText?: string
   onConfirm: () => void
   onCancel: () => void
   isConfirming?: boolean
@@ -18,6 +20,7 @@ export function ConfirmModal({
   description,
   confirmText = 'Confirmar',
   cancelText = 'Cancelar',
+  confirmingText = 'Guardando...',
   onConfirm,
   onCancel,
   isConfirming = false,
@@ -58,7 +61,7 @@ export function ConfirmModal({
             className="px-4 py-2 text-sm font-semibold bg-[#6353FF] hover:bg-[#5244e6] text-white rounded-xl transition-colors disabled:opacity-50"
             disabled={isConfirming}
           >
-            {isConfirming ? 'Guardando...' : confirmText}
+            {isConfirming ? confirmingText : confirmText}
           </button>
         </div>
       </div>

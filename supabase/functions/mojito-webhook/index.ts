@@ -78,6 +78,25 @@ Deno.serve(async (req: Request) => {
 
     const reopenWindowDays = settings?.reopen_window_days ?? 15
 
+    // Resolver entidad por Company (match exacto por entities.name) y tomar asignado/responsable
+    type ResolvedEntity = { id: string; assigned_to: string | null }
+    let resolvedEntity: ResolvedEntity | null = null
+    const companyName = typeof payload.Company === 'string' ? payload.Company.trim() : ''
+    if (companyName) {
+      const { data: entityRow } = await supabase
+        .from('entities')
+        .select('id, assigned_to')
+        .eq('name', companyName)
+        .limit(1)
+        .maybeSingle()
+      if (entityRow?.id) {
+        resolvedEntity = {
+          id: entityRow.id,
+          assigned_to: entityRow.assigned_to ?? null,
+        }
+      }
+    }
+
     const baseTicketData = {
       external_ref: externalRef,
       external_source: 'Mojito360',
@@ -91,6 +110,10 @@ Deno.serve(async (req: Request) => {
       created_by_email: creatorEmail ?? null,
       skip_mojito_sync: true,
       updated_at: nowIso,
+      ...(resolvedEntity && {
+        entity_id: resolvedEntity.id,
+        ...(resolvedEntity.assigned_to && { assigned_to: resolvedEntity.assigned_to }),
+      }),
     }
 
     let savedTicket = existingTicket
@@ -155,6 +178,10 @@ Deno.serve(async (req: Request) => {
               last_client_activity_at: nowIso,
               skip_mojito_sync: true,
               updated_at: nowIso,
+              ...(resolvedEntity && {
+                entity_id: resolvedEntity.id,
+                ...(resolvedEntity.assigned_to && { assigned_to: resolvedEntity.assigned_to }),
+              }),
             })
             .select('id')
             .single()

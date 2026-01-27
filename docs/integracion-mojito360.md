@@ -104,6 +104,7 @@ Este documento describe la integracion entre Mojito360 y el Help Desk, las Edge 
 - `MOJITO_WEBHOOK_SECRET`
 **Dependencias de datos**:
 - `app_settings.system_user_id` se usa como `uploaded_by` para adjuntos externos.
+- `entities.name` debe coincidir exactamente con `Company` cuando se quiera asignar entidad y asignado automáticamente; `entities.assigned_to` es el perfil que se copiará a `tickets.assigned_to`.
 
 **Mapeo de estado** (actual):
 - `created` -> `new`
@@ -116,6 +117,14 @@ Este documento describe la integracion entre Mojito360 y el Help Desk, las Edge 
 - default -> `new`
 
 **Upsert**: por `external_source + external_ref`.
+
+**Entidad y asignado desde Company**:
+- Si el webhook recibe `Company` como string y existe una fila en `public.entities` con `name` **exactamente igual** (tras hacer trim), se asigna ese ticket interno a esa entidad y, si la entidad tiene `assigned_to`, se rellena el asignado del ticket.
+- Comportamiento: se hace una búsqueda por `entities.name = Company.trim()`. Si hay match:
+  - Se setea `ticket.entity_id` = id de la entidad.
+  - Si la entidad tiene `assigned_to` (perfil por defecto), se setea `ticket.assigned_to` con ese valor.
+- Esto se aplica tanto en creación como en edición (upsert) y también en el flujo de reapertura tardía (nuevo ticket hijo). Si no hay match, no se modifica `entity_id` ni `assigned_to` respecto a lo que ya tuviera el ticket.
+- Requisito: que los nombres de empresa en Mojito coincidan **exactamente** con `entities.name` en la BD (incluyendo mayúsculas, espacios y acentos).
 
 **Adjuntos externos**:
 - Si viene `Attachments`/`attachments`, se insertan en `public.attachments` con `external_url`.

@@ -2,10 +2,18 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Sidebar } from '../components/Sidebar'
 import { ConfirmModal } from '../components/ConfirmModal'
-import { useCurrentUser, useEntities, useProfiles, useUpdateEntities, useUpdateEntity } from '../hooks/useData'
+import { useCurrentUser, useEntities, useProfiles, useUpdateEntities, useUpdateEntity, useCreateEntity } from '../hooks/useData'
 import { sendNotificationEmails, useCreateNotifications } from '../hooks/useNotifications'
 import type { Entity } from '../lib/supabase'
-import { Building2, Shield, Loader2, Users } from 'lucide-react'
+import { Building2, Shield, Loader2, Users, Plus, Pencil, Trash2 } from 'lucide-react'
+
+type EntityForm = {
+  name: string
+  external_id: string
+  status: 'active' | 'inactive'
+  usage: string
+  assigned_to: string
+}
 
 export function EntitiesPage() {
   const navigate = useNavigate()
@@ -14,6 +22,7 @@ export function EntitiesPage() {
   const { data: profiles, isLoading: loadingProfiles } = useProfiles()
   const updateEntity = useUpdateEntity()
   const updateEntities = useUpdateEntities()
+  const createEntity = useCreateEntity()
   const createNotifications = useCreateNotifications()
 
   const [selectedIds, setSelectedIds] = useState<string[]>([])
@@ -25,14 +34,35 @@ export function EntitiesPage() {
   const [bulkUpdating, setBulkUpdating] = useState(false)
   const [pendingSingleId, setPendingSingleId] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
+  const [createOpen, setCreateOpen] = useState(false)
+  const [entityToEdit, setEntityToEdit] = useState<Entity | null>(null)
+  const [entityToDelete, setEntityToDelete] = useState<Entity | null>(null)
+  const [createForm, setCreateForm] = useState<EntityForm>({
+    name: '',
+    external_id: '',
+    status: 'active',
+    usage: '',
+    assigned_to: '',
+  })
+  const [editForm, setEditForm] = useState<EntityForm>({
+    name: '',
+    external_id: '',
+    status: 'active',
+    usage: '',
+    assigned_to: '',
+  })
 
   const isAdmin = currentUser?.role === 'admin'
 
   const isUpdating =
     updateEntity.isPending ||
     updateEntities.isPending ||
+    createEntity.isPending ||
     awaitingRefresh ||
     isFetching
+  const isSavingEdit = Boolean(entityToEdit && updateEntity.isPending)
+  const isSavingCreate = Boolean(createOpen && createEntity.isPending)
+  const isDeleting = Boolean(entityToDelete && updateEntity.isPending)
 
   useEffect(() => {
     if (!awaitingRefresh || updateEntity.isPending || updateEntities.isPending || isFetching) return
@@ -201,6 +231,82 @@ export function EntitiesPage() {
     }
   }
 
+  const handleCreateOpen = () => {
+    setCreateForm({ name: '', external_id: '', status: 'active', usage: '', assigned_to: '' })
+    setCreateOpen(true)
+  }
+
+  const handleCreateConfirm = async () => {
+    if (!createForm.name.trim()) {
+      alert('El nombre es obligatorio.')
+      return
+    }
+    try {
+      await createEntity.mutateAsync({
+        name: createForm.name.trim(),
+        external_id: createForm.external_id.trim() || null,
+        status: createForm.status,
+        usage: createForm.usage.trim() || null,
+        assigned_to: createForm.assigned_to || null,
+      })
+      setCreateOpen(false)
+    } catch (err) {
+      console.error(err)
+      alert('No se pudo crear la entidad.')
+    }
+  }
+
+  const handleEditOpen = (entity: Entity) => {
+    setEntityToEdit(entity)
+    setEditForm({
+      name: entity.name ?? '',
+      external_id: entity.external_id ?? '',
+      status: (entity.status as 'active' | 'inactive') ?? 'active',
+      usage: entity.usage ?? '',
+      assigned_to: entity.assigned_to ?? '',
+    })
+  }
+
+  const handleEditConfirm = async () => {
+    if (!entityToEdit) return
+    if (!editForm.name.trim()) {
+      alert('El nombre es obligatorio.')
+      return
+    }
+    try {
+      await updateEntity.mutateAsync({
+        id: entityToEdit.id,
+        name: editForm.name.trim(),
+        external_id: editForm.external_id.trim() || null,
+        status: editForm.status,
+        usage: editForm.usage.trim() || null,
+        assigned_to: editForm.assigned_to || null,
+      })
+      setEntityToEdit(null)
+    } catch (err) {
+      console.error(err)
+      alert('No se pudo actualizar la entidad.')
+    }
+  }
+
+  const handleDeleteOpen = (entity: Entity) => {
+    setEntityToDelete(entity)
+  }
+
+  const handleDeleteConfirm = async () => {
+    if (!entityToDelete) return
+    try {
+      await updateEntity.mutateAsync({
+        id: entityToDelete.id,
+        status: 'inactive',
+      })
+      setEntityToDelete(null)
+    } catch (err) {
+      console.error(err)
+      alert('No se pudo eliminar la entidad.')
+    }
+  }
+
   return (
     <div className="flex h-screen bg-white overflow-hidden">
       <Sidebar />
@@ -212,16 +318,27 @@ export function EntitiesPage() {
               <h1 className="text-lg font-semibold text-[#3F4444]">Entidades</h1>
               <p className="text-sm text-[#8A8F8F]">Asigna responsables a las entidades activas.</p>
             </div>
-            {hasSelection && (
+            <div className="flex items-center gap-3">
               <button
                 type="button"
-                onClick={() => setBulkOpen(true)}
+                onClick={handleCreateOpen}
                 disabled={isUpdating}
-                className="px-4 py-2 text-sm font-semibold bg-[#6353FF] hover:bg-[#5244e6] text-white rounded-xl transition-colors disabled:opacity-50"
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold bg-[#6353FF] hover:bg-[#5244e6] text-white rounded-xl transition-colors disabled:opacity-50"
               >
-                Cambiar Responsable
+                <Plus className="w-4 h-4" />
+                Crear entidad
               </button>
-            )}
+              {hasSelection && (
+                <button
+                  type="button"
+                  onClick={() => setBulkOpen(true)}
+                  disabled={isUpdating}
+                  className="px-4 py-2 text-sm font-semibold bg-[#6353FF] hover:bg-[#5244e6] text-white rounded-xl transition-colors disabled:opacity-50"
+                >
+                  Cambiar Responsable
+                </button>
+              )}
+            </div>
           </header>
 
           <section className="bg-white border border-[#E0E0E1] rounded-2xl p-6">
@@ -271,6 +388,7 @@ export function EntitiesPage() {
                       </th>
                       <th className="px-4 py-3 text-left">Entidad</th>
                       <th className="px-4 py-3 text-left">Responsable</th>
+                      <th className="px-4 py-3 text-left w-28">Acciones</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#E0E0E1]">
@@ -334,11 +452,33 @@ export function EntitiesPage() {
                             </span>
                           )}
                         </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleEditOpen(entity)}
+                              disabled={isUpdating}
+                              className="p-1.5 rounded-lg text-[#8A8F8F] hover:text-[#6353FF] hover:bg-[rgba(99,83,255,0.1)] transition-colors disabled:opacity-50"
+                              title="Editar"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteOpen(entity)}
+                              disabled={isUpdating}
+                              className="p-1.5 rounded-lg text-[#8A8F8F] hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+                              title="Eliminar"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
                       </tr>
                     ))}
                     {filteredEntities.length === 0 && !loadingEntities && (
                       <tr>
-                        <td colSpan={3} className="px-4 py-6 text-center text-sm text-[#8A8F8F]">
+                        <td colSpan={4} className="px-4 py-6 text-center text-sm text-[#8A8F8F]">
                           No hay entidades para mostrar.
                         </td>
                       </tr>
@@ -389,6 +529,217 @@ export function EntitiesPage() {
         }}
         onConfirm={handleBulkConfirm}
       />
+
+      <ConfirmModal
+        open={entityToDelete != null}
+        title="Eliminar entidad"
+        description={
+          entityToDelete ? (
+            <div className="space-y-3 text-sm text-[#5A5F5F]">
+              <p>
+                ¿Eliminar la entidad <span className="font-semibold text-[#3F4444]">{entityToDelete.name}</span>?
+                Dejará de estar activa y no aparecerá en la lista.
+              </p>
+              <p className="font-medium text-[#3F4444]">
+                Esta acción no se puede deshacer.
+              </p>
+              <p>
+                Si más adelante necesitas volver a dar de alta esta entidad, créala de nuevo con el <strong>ID externo</strong> igual al ID de Mojito y el <strong>nombre</strong> exactamente como lo tienen en Mojito, para que la integración la reconozca.
+              </p>
+            </div>
+          ) : null
+        }
+        confirmText="Eliminar"
+        confirmingText="Eliminando..."
+        isConfirming={isDeleting}
+        disableClose={isDeleting}
+        onCancel={() => { if (!isDeleting) setEntityToDelete(null) }}
+        onConfirm={handleDeleteConfirm}
+      />
+
+      {createOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/40"
+            onClick={() => { if (!isSavingCreate) setCreateOpen(false) }}
+            role="button"
+            tabIndex={isSavingCreate ? -1 : 0}
+            aria-label="Cerrar"
+          />
+          <div className="relative bg-white rounded-2xl shadow-xl border border-[#E0E0E1] w-full max-w-md mx-4 p-6 space-y-4">
+            <h3 className="text-lg font-semibold text-[#3F4444]">Crear entidad</h3>
+            <div className="space-y-3 text-sm">
+              <div>
+                <label className="block text-xs font-semibold text-[#8A8F8F] uppercase tracking-wider mb-1">Nombre</label>
+                <input
+                  value={createForm.name}
+                  onChange={(e) => setCreateForm(prev => ({ ...prev, name: e.target.value }))}
+                  className="w-full px-3 py-2 bg-white border border-[#E0E0E1] rounded-xl text-[#3F4444] outline-none focus:ring-2 focus:ring-[#6353FF] focus:ring-opacity-30"
+                  placeholder="Nombre de la entidad"
+                  disabled={isSavingCreate}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-[#8A8F8F] uppercase tracking-wider mb-1">External ID</label>
+                <input
+                  value={createForm.external_id}
+                  onChange={(e) => setCreateForm(prev => ({ ...prev, external_id: e.target.value }))}
+                  className="w-full px-3 py-2 bg-white border border-[#E0E0E1] rounded-xl text-[#3F4444] outline-none focus:ring-2 focus:ring-[#6353FF] focus:ring-opacity-30"
+                  placeholder="ID externo (opcional)"
+                  disabled={isSavingCreate}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-[#8A8F8F] uppercase tracking-wider mb-1">Estado</label>
+                <select
+                  value={createForm.status}
+                  onChange={(e) => setCreateForm(prev => ({ ...prev, status: e.target.value as 'active' | 'inactive' }))}
+                  className="w-full px-3 py-2 bg-white border border-[#E0E0E1] rounded-xl text-[#3F4444] outline-none focus:ring-2 focus:ring-[#6353FF] focus:ring-opacity-30 appearance-none"
+                  disabled={isSavingCreate}
+                >
+                  <option value="active">Activa</option>
+                  <option value="inactive">Inactiva</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-[#8A8F8F] uppercase tracking-wider mb-1">Uso</label>
+                <input
+                  value={createForm.usage}
+                  onChange={(e) => setCreateForm(prev => ({ ...prev, usage: e.target.value }))}
+                  className="w-full px-3 py-2 bg-white border border-[#E0E0E1] rounded-xl text-[#3F4444] outline-none focus:ring-2 focus:ring-[#6353FF] focus:ring-opacity-30"
+                  placeholder="Ej. Producción, Interna, Test"
+                  disabled={isSavingCreate}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-[#8A8F8F] uppercase tracking-wider mb-1">Responsable</label>
+                <select
+                  value={createForm.assigned_to}
+                  onChange={(e) => setCreateForm(prev => ({ ...prev, assigned_to: e.target.value }))}
+                  className="w-full px-3 py-2 bg-white border border-[#E0E0E1] rounded-xl text-[#3F4444] outline-none focus:ring-2 focus:ring-[#6353FF] focus:ring-opacity-30 appearance-none"
+                  disabled={isSavingCreate}
+                >
+                  <option value="">Sin responsable</option>
+                  {(profiles || []).map(p => (
+                    <option key={p.id} value={p.id}>{p.email || p.full_name || p.id}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => { if (!isSavingCreate) setCreateOpen(false) }}
+                disabled={isSavingCreate}
+                className="px-4 py-2 text-sm font-medium text-[#8A8F8F] hover:bg-[#F7F7F8] rounded-xl"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleCreateConfirm}
+                disabled={isSavingCreate || !createForm.name.trim()}
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold bg-[#6353FF] hover:bg-[#5244e6] text-white rounded-xl disabled:opacity-50"
+              >
+                {isSavingCreate && <Loader2 className="w-4 h-4 animate-spin" />}
+                {isSavingCreate ? 'Creando...' : 'Crear'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {entityToEdit != null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/40"
+            onClick={() => { if (!isSavingEdit) setEntityToEdit(null) }}
+            role="button"
+            tabIndex={isSavingEdit ? -1 : 0}
+            aria-label="Cerrar"
+          />
+          <div className="relative bg-white rounded-2xl shadow-xl border border-[#E0E0E1] w-full max-w-md mx-4 p-6 space-y-4">
+            <h3 className="text-lg font-semibold text-[#3F4444]">Editar entidad</h3>
+            <div className="space-y-3 text-sm">
+              <div>
+                <label className="block text-xs font-semibold text-[#8A8F8F] uppercase tracking-wider mb-1">Nombre</label>
+                <input
+                  value={editForm.name}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, name: e.target.value }))}
+                  className="w-full px-3 py-2 bg-white border border-[#E0E0E1] rounded-xl text-[#3F4444] outline-none focus:ring-2 focus:ring-[#6353FF] focus:ring-opacity-30"
+                  placeholder="Nombre de la entidad"
+                  disabled={isSavingEdit}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-[#8A8F8F] uppercase tracking-wider mb-1">External ID</label>
+                <input
+                  value={editForm.external_id}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, external_id: e.target.value }))}
+                  className="w-full px-3 py-2 bg-white border border-[#E0E0E1] rounded-xl text-[#3F4444] outline-none focus:ring-2 focus:ring-[#6353FF] focus:ring-opacity-30"
+                  placeholder="ID externo (opcional)"
+                  disabled={isSavingEdit}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-[#8A8F8F] uppercase tracking-wider mb-1">Estado</label>
+                <select
+                  value={editForm.status}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, status: e.target.value as 'active' | 'inactive' }))}
+                  className="w-full px-3 py-2 bg-white border border-[#E0E0E1] rounded-xl text-[#3F4444] outline-none focus:ring-2 focus:ring-[#6353FF] focus:ring-opacity-30 appearance-none"
+                  disabled={isSavingEdit}
+                >
+                  <option value="active">Activa</option>
+                  <option value="inactive">Inactiva</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-[#8A8F8F] uppercase tracking-wider mb-1">Uso</label>
+                <input
+                  value={editForm.usage}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, usage: e.target.value }))}
+                  className="w-full px-3 py-2 bg-white border border-[#E0E0E1] rounded-xl text-[#3F4444] outline-none focus:ring-2 focus:ring-[#6353FF] focus:ring-opacity-30"
+                  placeholder="Ej. Producción, Interna, Test"
+                  disabled={isSavingEdit}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-[#8A8F8F] uppercase tracking-wider mb-1">Responsable</label>
+                <select
+                  value={editForm.assigned_to}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, assigned_to: e.target.value }))}
+                  className="w-full px-3 py-2 bg-white border border-[#E0E0E1] rounded-xl text-[#3F4444] outline-none focus:ring-2 focus:ring-[#6353FF] focus:ring-opacity-30 appearance-none"
+                  disabled={isSavingEdit}
+                >
+                  <option value="">Sin responsable</option>
+                  {(profiles || []).map(p => (
+                    <option key={p.id} value={p.id}>{p.email || p.full_name || p.id}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => { if (!isSavingEdit) setEntityToEdit(null) }}
+                disabled={isSavingEdit}
+                className="px-4 py-2 text-sm font-medium text-[#8A8F8F] hover:bg-[#F7F7F8] rounded-xl"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleEditConfirm}
+                disabled={isSavingEdit || !editForm.name.trim()}
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold bg-[#6353FF] hover:bg-[#5244e6] text-white rounded-xl disabled:opacity-50"
+              >
+                {isSavingEdit && <Loader2 className="w-4 h-4 animate-spin" />}
+                {isSavingEdit ? 'Guardando...' : 'Guardar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
