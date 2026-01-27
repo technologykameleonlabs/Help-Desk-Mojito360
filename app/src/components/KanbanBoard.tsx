@@ -5,7 +5,9 @@ import { STAGES, PRIORITIES } from '../lib/supabase'
 import { buildTicketGroups, type GroupByKey } from '../lib/ticketGrouping'
 import { User, Building2 } from 'lucide-react'
 import type { TicketFilters } from '../pages/DashboardPage'
+import { isValidTicketType, VALID_TICKET_TYPE_OPTIONS } from '../lib/ticketOptions'
 import { ConfirmModal } from './ConfirmModal'
+import { SingleSelect } from './SingleSelect'
 import {
   DndContext,
   DragOverlay,
@@ -171,6 +173,8 @@ export function KanbanBoard({ onTicketClick, filters, groupBy }: KanbanBoardProp
   } | null>(null)
   const [pendingSolution, setPendingSolution] = useState('')
   const [pendingSolutionError, setPendingSolutionError] = useState<string | null>(null)
+  const [pendingTipo, setPendingTipo] = useState('')
+  const [pendingTipoError, setPendingTipoError] = useState<string | null>(null)
   const [awaitingRefresh, setAwaitingRefresh] = useState(false)
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
@@ -354,12 +358,24 @@ export function KanbanBoard({ onTicketClick, filters, groupBy }: KanbanBoardProp
     }
   }, [awaitingRefresh, updateTicket.isPending, isFetching])
 
+  const moveTicket = pendingMove ? ticketsById.get(pendingMove.ticketId) : null
+  const needsTipo = !!(
+    pendingMove &&
+    (pendingMove.toStage === 'pending_validation' || pendingMove.toStage === 'done') &&
+    moveTicket &&
+    !isValidTicketType(moveTicket.ticket_type)
+  )
+
   useEffect(() => {
-    if (pendingMove?.toStage === 'pending_validation') {
+    if (!pendingMove) return
+    if (pendingMove.toStage === 'pending_validation') {
       setPendingSolution('')
       setPendingSolutionError(null)
     }
-  }, [pendingMove?.toStage])
+    const t = ticketsById.get(pendingMove.ticketId)
+    setPendingTipo(isValidTicketType(t?.ticket_type) ? (t?.ticket_type ?? '') : '')
+    setPendingTipoError(null)
+  }, [pendingMove, ticketsById])
   
   if (isLoading) {
     return (
@@ -468,6 +484,25 @@ export function KanbanBoard({ onTicketClick, filters, groupBy }: KanbanBoardProp
                 <span className="text-[#8A8F8F]">→</span>
                 <span className="font-semibold">{STAGES[pendingMove.toStage].label}</span>
               </div>
+              {needsTipo && (
+                <div className="space-y-2">
+                  <label className="block text-xs font-semibold text-[#3F4444]">
+                    Tipo (obligatorio)
+                  </label>
+                  <SingleSelect
+                    options={VALID_TICKET_TYPE_OPTIONS}
+                    value={pendingTipo}
+                    onChange={(v) => {
+                      setPendingTipo(v)
+                      if (pendingTipoError) setPendingTipoError(null)
+                    }}
+                    placeholder="Selecciona un tipo válido..."
+                  />
+                  {pendingTipoError && (
+                    <div className="text-[11px] text-red-500">{pendingTipoError}</div>
+                  )}
+                </div>
+              )}
               {pendingMove.toStage === 'pending_validation' && (
                 <div className="space-y-2">
                   <label className="block text-xs font-semibold text-[#3F4444]">
@@ -500,10 +535,16 @@ export function KanbanBoard({ onTicketClick, filters, groupBy }: KanbanBoardProp
             setPendingMove(null)
             setPendingSolution('')
             setPendingSolutionError(null)
+            setPendingTipo('')
+            setPendingTipoError(null)
           }
         }}
         onConfirm={async () => {
           if (!pendingMove) return
+          if (needsTipo && !pendingTipo.trim()) {
+            setPendingTipoError('Selecciona un tipo válido.')
+            return
+          }
           if (pendingMove.toStage === 'pending_validation' && !pendingSolution.trim()) {
             setPendingSolutionError('Debes ingresar un mensaje de solución.')
             return
@@ -513,6 +554,7 @@ export function KanbanBoard({ onTicketClick, filters, groupBy }: KanbanBoardProp
             await updateTicket.mutateAsync({
               id: pendingMove.ticketId,
               stage: pendingMove.toStage,
+              ...(needsTipo ? { ticket_type: pendingTipo } : {}),
               solution: pendingMove.toStage === 'pending_validation'
                 ? pendingSolution.trim()
                 : undefined

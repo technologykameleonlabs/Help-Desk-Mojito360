@@ -25,6 +25,22 @@ export const TICKET_TYPE_OPTIONS = [
   { value: 'Tarea', label: 'Tarea', icon: '📄' },
 ] as const
 
+/** Opciones de tipo válido (excluye Desconocido) para Pdte. Validación y Completado */
+export const VALID_TICKET_TYPE_OPTIONS = TICKET_TYPE_OPTIONS.filter(
+  (o) => o.value !== 'Desconocido'
+)
+
+const VALID_TIPO_VALUES: Set<string> = new Set(
+  VALID_TICKET_TYPE_OPTIONS.map((o) => o.value as string)
+)
+
+/** Solo Consulta, Correctivo, Evolutivo y Tarea son válidos. Null, vacío y Desconocido no. */
+export function isValidTicketType(value?: string | null): boolean {
+  const s = typeof value === 'string' ? value.trim() : ''
+  if (!s) return false
+  return VALID_TIPO_VALUES.has(s)
+}
+
 export const getCategoryOption = (value?: string | null) => {
   if (!value) return null
   return CATEGORY_OPTIONS.find(option => option.value === value) || null

@@ -47,7 +47,7 @@ import { clsx } from 'clsx'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { MultiSelect } from './MultiSelect'
-import { getCategoryOption, getTicketTypeOption, TICKET_TYPE_OPTIONS, CATEGORY_OPTIONS } from '../lib/ticketOptions'
+import { getCategoryOption, getTicketTypeOption, TICKET_TYPE_OPTIONS, CATEGORY_OPTIONS, isValidTicketType, VALID_TICKET_TYPE_OPTIONS } from '../lib/ticketOptions'
 import { useQueryClient } from '@tanstack/react-query'
 import { SingleSelect } from './SingleSelect'
 
@@ -122,6 +122,9 @@ export function TicketDetail() {
   const [solutionModalText, setSolutionModalText] = useState('')
   const [solutionModalError, setSolutionModalError] = useState<string | null>(null)
   const [pendingUpdates, setPendingUpdates] = useState<(Partial<Ticket> & { id: string }) | null>(null)
+  const [pendingTipo, setPendingTipo] = useState('')
+  const [pendingTipoError, setPendingTipoError] = useState<string | null>(null)
+  const [tipoRequiredModalOpen, setTipoRequiredModalOpen] = useState(false)
 
   const [draft, setDraft] = useState({
     stage: '' as TicketStage,
@@ -631,10 +634,20 @@ export function TicketDetail() {
         updates.assigned_to = selectedEntity.assigned_to
       }
 
+      if (draft.stage === 'done' && draft.stage !== ticket.stage && !isValidTicketType(ticket.ticket_type)) {
+        setPendingUpdates(updates)
+        setPendingTipo('')
+        setPendingTipoError(null)
+        setTipoRequiredModalOpen(true)
+        return
+      }
+
       if (draft.stage === 'pending_validation' && draft.stage !== ticket.stage) {
         setPendingUpdates(updates)
         setSolutionModalText(ticket.solution || '')
         setSolutionModalError(null)
+        setPendingTipo(isValidTicketType(ticket.ticket_type) ? (ticket.ticket_type ?? '') : '')
+        setPendingTipoError(null)
         setSolutionModalOpen(true)
         return
       }
@@ -1440,6 +1453,25 @@ export function TicketDetail() {
             <p className="text-sm text-[#5A5F5F]">
               Debes ingresar el mensaje de solución para continuar.
             </p>
+            {ticket && !isValidTicketType(ticket.ticket_type) && (
+              <div className="space-y-2">
+                <label className="block text-xs font-semibold text-[#3F4444]">
+                  Tipo (obligatorio)
+                </label>
+                <SingleSelect
+                  options={VALID_TICKET_TYPE_OPTIONS}
+                  value={pendingTipo}
+                  onChange={(v) => {
+                    setPendingTipo(v)
+                    if (pendingTipoError) setPendingTipoError(null)
+                  }}
+                  placeholder="Selecciona un tipo válido..."
+                />
+                {pendingTipoError && (
+                  <div className="text-[11px] text-red-500">{pendingTipoError}</div>
+                )}
+              </div>
+            )}
             <div className="space-y-2">
               <label className="block text-xs font-semibold text-[#3F4444]">
                 Mensaje de solución
@@ -1468,20 +1500,86 @@ export function TicketDetail() {
           if (!isSaving) {
             setSolutionModalOpen(false)
             setPendingUpdates(null)
+            setPendingTipoError(null)
           }
         }}
         onConfirm={async () => {
           if (!pendingUpdates) return
+          if (ticket && !isValidTicketType(ticket.ticket_type) && !pendingTipo.trim()) {
+            setPendingTipoError('Selecciona un tipo válido.')
+            return
+          }
           if (!solutionModalText.trim()) {
             setSolutionModalError('Debes ingresar un mensaje de solución.')
             return
           }
           setSolutionModalOpen(false)
+          setPendingTipoError(null)
           try {
             await applyUpdates({
               ...pendingUpdates,
               solution: solutionModalText.trim(),
+              ...(ticket && !isValidTicketType(ticket.ticket_type) ? { ticket_type: pendingTipo } : {}),
             })
+          } catch (error) {
+            console.error(error)
+            alert('No se pudo actualizar el ticket.')
+            setAwaitingRefresh(false)
+            setPendingSaveMessage(null)
+          } finally {
+            setPendingUpdates(null)
+          }
+        }}
+      />
+
+      <ConfirmModal
+        open={tipoRequiredModalOpen}
+        title={`Tipo requerido para ${STAGES.done.label}`}
+        description={
+          <div className="space-y-3">
+            <p className="text-sm text-[#5A5F5F]">
+              El ticket debe tener un tipo válido (distinto de Desconocido) para marcarlo como Completado.
+            </p>
+            <div className="space-y-2">
+              <label className="block text-xs font-semibold text-[#3F4444]">
+                Tipo (obligatorio)
+              </label>
+              <SingleSelect
+                options={VALID_TICKET_TYPE_OPTIONS}
+                value={pendingTipo}
+                onChange={(v) => {
+                  setPendingTipo(v)
+                  if (pendingTipoError) setPendingTipoError(null)
+                }}
+                placeholder="Selecciona un tipo válido..."
+              />
+              {pendingTipoError && (
+                <div className="text-[11px] text-red-500">{pendingTipoError}</div>
+              )}
+            </div>
+          </div>
+        }
+        confirmText="Aceptar"
+        cancelText="Cancelar"
+        isConfirming={isSaving}
+        disableClose={isSaving}
+        onCancel={() => {
+          if (!isSaving) {
+            setTipoRequiredModalOpen(false)
+            setPendingUpdates(null)
+            setPendingTipoError(null)
+          }
+        }}
+        onConfirm={async () => {
+          if (!pendingUpdates) return
+          if (!pendingTipo.trim()) {
+            setPendingTipoError('Selecciona un tipo válido.')
+            return
+          }
+          setTipoRequiredModalOpen(false)
+          setPendingTipoError(null)
+          try {
+            await applyUpdates({ ...pendingUpdates, ticket_type: pendingTipo })
           } catch (error) {
             console.error(error)
             alert('No se pudo actualizar el ticket.')
