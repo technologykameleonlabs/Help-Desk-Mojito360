@@ -101,7 +101,7 @@ create table if not exists public.tickets (
   entity_id uuid references public.entities(id),
   
   -- Custom fields (from Odoo x_studio_*)
-  application text, -- 'Mojito360', 'Wintruck', 'Odoo'
+  application text, -- 'Mojito360', 'Wimtruck', 'Odoo'
   classification text, -- 'Soporte', 'Desarrollo'
   channel text, -- 'APP Tickets', 'Email', 'Teams'
   origin text, -- 'Externo', 'Interno'

@@ -47,16 +47,16 @@ import { clsx } from 'clsx'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { MultiSelect } from './MultiSelect'
-import { getCategoryOption } from '../lib/ticketOptions'
+import { getCategoryOption, getTicketTypeOption, TICKET_TYPE_OPTIONS, CATEGORY_OPTIONS } from '../lib/ticketOptions'
 import { useQueryClient } from '@tanstack/react-query'
+import { SingleSelect } from './SingleSelect'
 
-const TICKET_TYPES = [
-  '🔔 Alertas', '🔼 Carga', '💽 Dato', '📝 Documentos', 
-  '📡 Integración', '📈 Reportes', '👤 Usuarios', '✏️ Modificación', 
-  '⏱️ Rendimiento', '💕 Mapeos', '💎 Gestión del soporte', '🔎 Control'
+const TIPO_OPTIONS_WITH_EMPTY = [
+  { value: '', label: 'Sin tipo' },
+  ...TICKET_TYPE_OPTIONS,
 ]
 
-const APPLICATION_OPTIONS = ['Mojito360', 'Wintruck', 'Odoo', 'Otros']
+const APPLICATION_OPTIONS = ['Mojito360', 'Wimtruck', 'Odoo', 'Otros']
 const MAX_FILE_SIZE = 10 * 1024 * 1024
 const ALLOWED_MIME_TYPES = new Set([
   'image/jpeg',
@@ -72,7 +72,7 @@ const ALLOWED_MIME_TYPES = new Set([
   'text/csv',
 ])
 
-type EditableField = 'stage' | 'priority' | 'entity_id' | 'assigned_to' | 'ticket_type' | 'application' | 'labels'
+type EditableField = 'stage' | 'priority' | 'entity_id' | 'assigned_to' | 'ticket_type' | 'application' | 'category' | 'labels'
 
 export function TicketDetail() {
   const { id } = useParams<{ id: string }>()
@@ -130,6 +130,7 @@ export function TicketDetail() {
     assigned_to: '' as string,
     ticket_type: '' as string,
     application: '' as string,
+    category: '' as string,
   })
 
   useEffect(() => {
@@ -141,6 +142,7 @@ export function TicketDetail() {
       assigned_to: ticket.assigned_to || '',
       ticket_type: ticket.ticket_type || '',
       application: ticket.application || '',
+      category: ticket.category || '',
     })
     setEditingFields(new Set())
     setSelectedLabelIds(ticket.labels?.map(item => item.label.id) || [])
@@ -275,6 +277,7 @@ export function TicketDetail() {
       (draft.assigned_to || null) !== ticket.assigned_to ||
       (draft.ticket_type || '') !== (ticket.ticket_type || '') ||
       (draft.application || '') !== (ticket.application || '') ||
+      (draft.category || '') !== (ticket.category || '') ||
       labelsChanged
     )
   }, [draft, ticket, labelsChanged])
@@ -289,7 +292,7 @@ export function TicketDetail() {
   const entityResponsible = selectedEntity?.assigned_to_profile?.full_name ||
     selectedEntity?.assigned_to_profile?.email ||
     ''
-  const categoryOption = getCategoryOption(ticket?.category)
+  const categoryOption = getCategoryOption(draft.category || ticket?.category)
 
   const closePath = useMemo(() => {
     const path = location.pathname
@@ -379,6 +382,27 @@ export function TicketDetail() {
   const ticketAttachments = useMemo(() => {
     return attachments?.filter(item => !item.comment_id) || []
   }, [attachments])
+  /** Adjuntos de mensajes (solo de comentarios visibles), agrupados por comment_id */
+  const commentAttachmentsByComment = useMemo(() => {
+    if (!attachments || !comments) return []
+    const visibleIds = new Set((isClient ? comments.filter(c => !c.is_internal) : comments).map(c => c.id))
+    const fromComments = attachments.filter(a => a.comment_id && visibleIds.has(a.comment_id))
+    const byComment = new Map<string | null, typeof fromComments>()
+    for (const a of fromComments) {
+      const cid = a.comment_id!
+      if (!byComment.has(cid)) byComment.set(cid, [])
+      byComment.get(cid)!.push(a)
+    }
+    return Array.from(byComment.entries()).map(([commentId, atts]) => ({
+      commentId,
+      comment: comments.find(c => c.id === commentId),
+      attachments: atts,
+    })).filter(x => x.comment).sort((a, b) => {
+      const tA = a.attachments[0]?.created_at ?? ''
+      const tB = b.attachments[0]?.created_at ?? ''
+      return tA.localeCompare(tB)
+    }) as Array<{ commentId: string; comment: { user?: { full_name?: string } | null; created_at: string }; attachments: typeof attachments }>
+  }, [attachments, comments, isClient])
   const visibleComments = useMemo(() => {
     if (!comments) return []
     return isClient ? comments.filter(comment => !comment.is_internal) : comments
@@ -596,6 +620,7 @@ export function TicketDetail() {
       if ((draft.assigned_to || null) !== ticket.assigned_to) updates.assigned_to = draft.assigned_to || null
       if ((draft.ticket_type || '') !== (ticket.ticket_type || '')) updates.ticket_type = draft.ticket_type || null
       if ((draft.application || '') !== (ticket.application || '')) updates.application = draft.application || null
+      if ((draft.category || '') !== (ticket.category || '')) updates.category = draft.category || null
 
       const shouldAutoAssign =
         (!draft.assigned_to || draft.assigned_to.trim() === '') &&
@@ -631,6 +656,7 @@ export function TicketDetail() {
       assigned_to: ticket.assigned_to || '',
       ticket_type: ticket.ticket_type || '',
       application: ticket.application || '',
+      category: ticket.category || '',
     })
     setSelectedLabelIds(ticket.labels?.map(item => item.label.id) || [])
     setEditingFields(new Set())
@@ -814,9 +840,24 @@ export function TicketDetail() {
                   <Tag className="w-4 h-4 text-[#8A8F8F] mt-0.5" />
                   <div className="flex-1">
                     <span className="text-[#8A8F8F] block">Categoría</span>
-                    <span className="text-[#3F4444] font-medium">
-                      {categoryOption ? `${categoryOption.icon} ${categoryOption.label}` : '---'}
-                    </span>
+                    {editingFields.has('category') ? (
+                      <div className="mt-1">
+                        <SingleSelect
+                          options={[...CATEGORY_OPTIONS]}
+                          value={draft.category ?? ''}
+                          onChange={(v) => setDraft(prev => ({ ...prev, category: v || '' }))}
+                          placeholder="Sin categoría"
+                        />
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => enableEdit('category')}
+                        className="text-left flex items-center gap-2 text-[#3F4444] font-medium hover:text-[#6353FF] transition-colors"
+                      >
+                        {categoryOption ? `${categoryOption.icon} ${categoryOption.label}` : '---'}
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -854,23 +895,25 @@ export function TicketDetail() {
                   <div className="flex-1">
                     <span className="text-[#8A8F8F] block">Tipo</span>
                     {editingFields.has('ticket_type') ? (
-                      <select
-                        value={draft.ticket_type}
-                        onChange={(e) => setDraft(prev => ({ ...prev, ticket_type: e.target.value }))}
-                        className="mt-1 w-full bg-white border border-[#E0E0E1] rounded-xl px-3 py-2 text-sm text-[#3F4444] outline-none focus:ring-1 focus:ring-[#6353FF] transition-all appearance-none"
-                      >
-                        <option value="">Sin tipo</option>
-                        {TICKET_TYPES.map(type => (
-                          <option key={type} value={type}>{type}</option>
-                        ))}
-                      </select>
+                      <div className="mt-1">
+                        <SingleSelect
+                          options={TIPO_OPTIONS_WITH_EMPTY}
+                          value={draft.ticket_type ?? ''}
+                          onChange={(v) => setDraft(prev => ({ ...prev, ticket_type: v || '' }))}
+                          placeholder="Sin tipo"
+                        />
+                      </div>
                     ) : (
                       <button
                         type="button"
                         onClick={() => enableEdit('ticket_type')}
-                        className="text-left text-[#3F4444] font-medium hover:text-[#6353FF] transition-colors"
+                        className="text-left flex items-center gap-2 text-[#3F4444] font-medium hover:text-[#6353FF] transition-colors"
                       >
-                        {ticket.ticket_type || 'No definido'}
+                        {(() => {
+                          const opt = getTicketTypeOption(ticket.ticket_type)
+                          if (opt) return <><span>{opt.icon}</span> {opt.label}</>
+                          return ticket.ticket_type || 'No definido'
+                        })()}
                       </button>
                     )}
                   </div>
@@ -1025,17 +1068,41 @@ export function TicketDetail() {
             )}
           </div>
 
-          {/* Attachments */}
-          <div className="space-y-2">
+          {/* Attachments: del ticket y de mensajes, diferenciados */}
+          <div className="space-y-3">
             <h3 className="text-xs font-bold text-[#8A8F8F] uppercase tracking-widest">Adjuntos</h3>
-            {ticketAttachments.length > 0 ? (
-              <AttachmentList
-                attachments={ticketAttachments}
-                onDelete={handleDeleteAttachment}
-                canDelete={(attachment) => attachment.uploaded_by === currentUser?.id}
-              />
-            ) : (
+            {ticketAttachments.length === 0 && commentAttachmentsByComment.length === 0 ? (
               <div className="text-sm text-[#8A8F8F]">Sin adjuntos.</div>
+            ) : (
+              <div className="space-y-4">
+                {ticketAttachments.length > 0 && (
+                  <div>
+                    <p className="text-[11px] text-[#8A8F8F] uppercase tracking-wider font-medium mb-1.5">Del ticket</p>
+                    <AttachmentList
+                      attachments={ticketAttachments}
+                      onDelete={handleDeleteAttachment}
+                      canDelete={(attachment) => attachment.uploaded_by === currentUser?.id}
+                    />
+                  </div>
+                )}
+                {commentAttachmentsByComment.length > 0 && (
+                  <div className="space-y-3">
+                    <p className="text-[11px] text-[#8A8F8F] uppercase tracking-wider font-medium">De mensajes</p>
+                    {commentAttachmentsByComment.map(({ commentId, comment, attachments: atts }) => (
+                      <div key={commentId}>
+                        <p className="text-[10px] text-[#B0B5B5] mb-1">
+                          Mensaje de {comment.user?.full_name ?? 'Usuario'}, {format(new Date(comment.created_at), 'dd/MM/yyyy HH:mm', { locale: es })}
+                        </p>
+                        <AttachmentList
+                          attachments={atts}
+                          onDelete={handleDeleteAttachment}
+                          canDelete={(attachment) => attachment.uploaded_by === currentUser?.id}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
           </div>
 

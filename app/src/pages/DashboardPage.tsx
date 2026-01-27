@@ -71,7 +71,7 @@ const normalizeFilters = (input?: Partial<TicketFilters> | null): TicketFilters 
   responsible: Array.isArray(input?.responsible) ? input?.responsible : []
 })
 
-const APPLICATIONS = ['Mojito360', 'Wintruck', 'Odoo', 'Otros']
+const APPLICATIONS = ['Mojito360', 'Wimtruck', 'Odoo', 'Otros']
 
 // Convert STAGES to options format
 const STAGE_OPTIONS = Object.entries(STAGES).map(([key, value]) => ({

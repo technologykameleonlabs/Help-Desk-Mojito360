@@ -14,7 +14,8 @@ import { Sidebar } from '../components/Sidebar'
 import { ChevronLeft, Loader2 } from 'lucide-react'
 import type { TicketStage } from '../lib/supabase'
 import { MultiSelect } from '../components/MultiSelect'
-import { CATEGORY_OPTIONS } from '../lib/ticketOptions'
+import { SingleSelect } from '../components/SingleSelect'
+import { CATEGORY_OPTIONS, TICKET_TYPE_OPTIONS } from '../lib/ticketOptions'
 import { supabase } from '../lib/supabase'
 import { sendNotificationEmails, useCreateNotifications } from '../hooks/useNotifications'
 
@@ -34,14 +35,8 @@ const ticketSchema = z.object({
 
 type TicketFormValues = z.infer<typeof ticketSchema>
 
-const APPLICATIONS = ['Mojito360', 'Wintruck', 'Odoo', 'Otros']
+const APPLICATIONS = ['Mojito360', 'Wimtruck', 'Odoo', 'Otros']
 const CLASSIFICATIONS = ['Soporte', 'Desarrollo']
-const TICKET_TYPES = [
-
-  '🔔 Alertas', '🔼 Carga', '💽 Dato', '📝 Documentos', 
-  '📡 Integración', '📈 Reportes', '👤 Usuarios', '✏️ Modificación', 
-  '⏱️ Rendimiento', '💕 Mapeos', '💎 Gestión del soporte', '🔎 Control'
-]
 const MAX_FILE_SIZE = 10 * 1024 * 1024
 const ALLOWED_MIME_TYPES = new Set([
   'image/jpeg',
@@ -436,15 +431,15 @@ export function NewTicketPage() {
                 <label className="block text-sm font-medium text-[#3F4444] mb-2">
                   Tipo de Ticket
                 </label>
-                <select
-                  {...register('ticket_type')}
-                  className="w-full px-4 py-3 bg-white border border-[#E0E0E1] rounded-xl text-[#3F4444] focus:ring-2 focus:ring-[#6353FF] focus:ring-opacity-30 focus:border-[#6353FF] outline-none transition-all appearance-none"
-                >
-                  <option value="">Selecciona tipo...</option>
-                  {TICKET_TYPES.map(type => (
-                    <option key={type} value={type}>{type}</option>
-                  ))}
-                </select>
+                <SingleSelect
+                  options={[...TICKET_TYPE_OPTIONS]}
+                  value={watch('ticket_type') ?? ''}
+                  onChange={(v) => setValue('ticket_type', v, { shouldValidate: true })}
+                  placeholder="Selecciona tipo..."
+                />
+                {errors.ticket_type && (
+                  <p className="mt-1 text-sm text-red-500">{errors.ticket_type.message}</p>
+                )}
               </div>
             </div>
 

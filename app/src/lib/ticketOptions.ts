@@ -16,7 +16,21 @@ export const CATEGORY_OPTIONS = [
   { value: 'No definido', label: 'No definido', icon: '➖' },
 ]
 
+/** Opciones de "Tipo" de ticket (como en la UI de referencia: Desconocido, Consulta, Correctivo, Evolutivo, Tarea) */
+export const TICKET_TYPE_OPTIONS = [
+  { value: 'Desconocido', label: 'Desconocido', icon: '🛸' },
+  { value: 'Consulta', label: 'Consulta', icon: '❓' },
+  { value: 'Correctivo', label: 'Correctivo', icon: '🔥' },
+  { value: 'Evolutivo', label: 'Evolutivo', icon: '🤖' },
+  { value: 'Tarea', label: 'Tarea', icon: '📄' },
+] as const
+
 export const getCategoryOption = (value?: string | null) => {
   if (!value) return null
   return CATEGORY_OPTIONS.find(option => option.value === value) || null
+}
+
+export const getTicketTypeOption = (value?: string | null) => {
+  if (!value) return null
+  return TICKET_TYPE_OPTIONS.find(option => option.value === value) ?? null
 }

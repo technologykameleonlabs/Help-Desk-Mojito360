@@ -10,7 +10,7 @@ import { jsPDF } from 'jspdf'
 import type { TicketFilters } from './DashboardPage'
 import type { TicketStageHistory } from '../lib/supabase'
 
-const APPLICATIONS = ['Mojito360', 'Wintruck', 'Odoo', 'Otros']
+const APPLICATIONS = ['Mojito360', 'Wimtruck', 'Odoo', 'Otros']
 const APPLICATION_OPTIONS = APPLICATIONS.map(app => ({ value: app, label: app }))
 
 const DEFAULT_FILTERS: TicketFilters = {

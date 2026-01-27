@@ -6,7 +6,7 @@ import { useCurrentUser, useEntities, useSlaPolicies, useCreateSlaPolicy, useUpd
 import type { SlaPolicy, SlaThreshold, TicketPriority } from '../lib/supabase'
 import { Loader2, Shield, Sliders, Plus, Pencil, Trash2, Filter } from 'lucide-react'
 
-const APPLICATION_OPTIONS = ['Mojito360', 'Wintruck', 'Odoo', 'Otros']
+const APPLICATION_OPTIONS = ['Mojito360', 'Wimtruck', 'Odoo', 'Otros']
 
 type PolicyFormState = {
   name: string

@@ -5,6 +5,7 @@ import { clsx } from 'clsx'
 type Option = {
   value: string
   label: string
+  icon?: string
 }
 
 type SingleSelectProps = {
@@ -70,6 +71,7 @@ export function SingleSelect({
       >
         <div className="flex-1 flex items-center gap-2 min-w-0 overflow-hidden">
           {prefix && <span className="text-[#5A5F5F] whitespace-nowrap">{prefix}</span>}
+          {selectedOption?.icon && <span className="text-base leading-none">{selectedOption.icon}</span>}
           <span className={selectedOption ? 'text-[#3F4444]' : 'text-[#B0B5B5]'}>
             {selectedLabel}
           </span>
@@ -94,12 +96,13 @@ export function SingleSelect({
                     setIsOpen(false)
                   }}
                   className={clsx(
-                    'w-full px-3 py-2 text-sm text-left transition-colors',
+                    'w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors',
                     isSelected
                       ? 'bg-[rgba(99,83,255,0.08)] text-[#6353FF]'
                       : 'hover:bg-[#F7F7F8] text-[#3F4444]'
                   )}
                 >
+                  {option.icon && <span className="text-base leading-none">{option.icon}</span>}
                   {option.label}
                 </button>
               )
