@@ -1,6 +1,6 @@
 import { useState } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { useNavigate } from 'react-router-dom'
 
 export function LoginPage() {
   const [email, setEmail] = useState('')
@@ -8,6 +8,8 @@ export function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const resetSuccess = searchParams.get('reset') === 'success'
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -65,6 +67,11 @@ export function LoginPage() {
         </div>
 
         <form onSubmit={handleLogin} className="space-y-4">
+          {resetSuccess && (
+            <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded-xl text-sm">
+              Contraseña actualizada. Inicia sesión con tu nueva contraseña.
+            </div>
+          )}
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-xl text-sm">
               {error}
@@ -99,6 +106,15 @@ export function LoginPage() {
               placeholder="••••••••"
               required
             />
+          </div>
+
+          <div className="flex justify-end">
+            <Link
+              to="/forgot-password"
+              className="text-sm text-[#6353FF] hover:underline"
+            >
+              ¿Olvidaste tu contraseña?
+            </Link>
           </div>
 
           <button

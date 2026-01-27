@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard,
@@ -16,7 +16,9 @@ import {
   Plus,
   Bell,
   Moon,
-  Sun
+  Sun,
+  KeyRound,
+  ChevronDown
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useCurrentUser } from '../hooks/useData'
@@ -40,8 +42,21 @@ export function Sidebar() {
   })
   const { data: user } = useCurrentUser()
   const { data: unreadCount } = useUnreadNotificationCount()
+  const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const userMenuRef = useRef<HTMLDivElement>(null)
 
   useRealtimeNotifications()
+
+  useEffect(() => {
+    if (!userMenuOpen) return
+    const handleClickOutside = (e: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setUserMenuOpen(false)
+      }
+    }
+    document.addEventListener('click', handleClickOutside)
+    return () => document.removeEventListener('click', handleClickOutside)
+  }, [userMenuOpen])
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark')
@@ -74,7 +89,7 @@ export function Sidebar() {
   }
 
   return (
-    <aside className={`${collapsed ? 'w-20' : 'w-64'} h-screen bg-[#F7F7F8] border-r border-[#E0E0E1] flex flex-col transition-all duration-200 relative`}>
+    <aside className={`${collapsed ? 'w-20' : 'w-64'} h-screen bg-[#F7F7F8] border-r border-[#E0E0E1] flex flex-col transition-all duration-200 relative overflow-visible`}>
       {/* Logo */}
       <div className="h-16 px-4 border-b border-[#E0E0E1] flex items-center justify-center">
         <div className="flex items-center gap-2">
@@ -155,9 +170,14 @@ export function Sidebar() {
       </div>
 
       {/* User Section */}
-      <div className="p-4 border-t border-[#E0E0E1]">
-        <div className={`flex items-center ${collapsed ? 'flex-col gap-2' : 'gap-3'}`}>
-          <div className="w-9 h-9 rounded-full bg-[#6353FF] flex items-center justify-center text-white font-medium text-sm">
+      <div className="p-4 border-t border-[#E0E0E1] relative" ref={userMenuRef}>
+        <button
+          type="button"
+          onClick={() => setUserMenuOpen((o) => !o)}
+          className={`w-full flex items-center ${collapsed ? 'flex-col gap-2' : 'gap-3'} rounded-lg p-1 -m-1 text-left hover:bg-[#ECECED] transition-colors`}
+          title={collapsed ? 'Opciones de cuenta' : undefined}
+        >
+          <div className="w-9 h-9 rounded-full bg-[#6353FF] flex items-center justify-center text-white font-medium text-sm shrink-0">
             {user?.full_name?.[0] || user?.email?.[0] || '?'}
           </div>
           {!collapsed && (
@@ -168,14 +188,38 @@ export function Sidebar() {
               <p className="text-xs text-[#8A8F8F] truncate">{user?.email}</p>
             </div>
           )}
-          <button
-            onClick={handleLogout}
-            className="p-2 text-[#8A8F8F] hover:text-[#3F4444] hover:bg-[#ECECED] rounded-lg transition-colors"
-            title="Cerrar sesión"
+          {!collapsed && (
+            <ChevronDown
+              className={`w-4 h-4 text-[#8A8F8F] shrink-0 transition-transform ${userMenuOpen ? 'rotate-180' : ''}`}
+            />
+          )}
+        </button>
+
+        {userMenuOpen && (
+          <div
+            className={`absolute bottom-full mb-2 min-w-52 bg-white border border-[#E0E0E1] rounded-xl shadow-lg py-1 z-20 ${collapsed ? 'left-2' : 'left-4 right-4'}`}
           >
-            <LogOut className="w-4 h-4" />
-          </button>
-        </div>
+            <NavLink
+              to="/account"
+              onClick={() => setUserMenuOpen(false)}
+              className="flex items-center gap-3 px-3 py-2.5 text-sm text-[#3F4444] hover:bg-[#F7F7F8] transition-colors"
+            >
+              <KeyRound className="w-4 h-4 text-[#8A8F8F]" />
+              Cambiar contraseña
+            </NavLink>
+            <button
+              type="button"
+              onClick={() => {
+                setUserMenuOpen(false)
+                handleLogout()
+              }}
+              className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-[#3F4444] hover:bg-[#F7F7F8] transition-colors"
+            >
+              <LogOut className="w-4 h-4 text-[#8A8F8F]" />
+              Cerrar sesión
+            </button>
+          </div>
+        )}
       </div>
     </aside>
   )

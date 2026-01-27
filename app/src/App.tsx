@@ -3,6 +3,8 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { supabase } from './lib/supabase'
 import { LoginPage } from './pages/LoginPage'
+import { ForgotPasswordPage } from './pages/ForgotPasswordPage'
+import { ResetPasswordPage } from './pages/ResetPasswordPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { NewTicketPage } from './pages/NewTicketPage'
 import { InboxPage } from './pages/InboxPage'
@@ -14,6 +16,7 @@ import { LabelsPage } from './pages/LabelsPage'
 import { NotificationsPage } from './pages/NotificationsPage'
 import { SlaSettingsPage } from './pages/SlaSettingsPage'
 import { ManagerDashboardPage } from './pages/ManagerDashboardPage'
+import { AccountPage } from './pages/AccountPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -66,6 +69,8 @@ function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route
             path="/*"
             element={
@@ -102,6 +107,9 @@ function App() {
 
                   {/* Notifications */}
                   <Route path="/notifications" element={<NotificationsPage />} />
+
+                  {/* Mi cuenta */}
+                  <Route path="/account" element={<AccountPage />} />
 
                   {/* SLA Settings */}
                   <Route path="/admin/sla" element={<SlaSettingsPage />} />
