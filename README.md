@@ -27,12 +27,16 @@ npm install
 
 ### Environment Variables
 
-Create a `.env.local` file in the `app` folder:
+Create a `.env.local` file in the `app` folder for the frontend:
 
 ```env
 VITE_SUPABASE_URL=your_supabase_url
 VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
+
+**Importante**: El frontend **no** utiliza la service role key. La creación y edición de usuarios se hace mediante la Edge Function `admin-users`, que valida el JWT y el rol admin en el servidor. En Vercel solo hace falta `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`.
+
+Para **scripts locales** (seed, create_user, import_tickets, check_tables) se usa la variable `SUPABASE_SERVICE_KEY` en el entorno (p. ej. en `.env.local` en la raíz o donde se ejecuten). No uses el prefijo `VITE_` para esa clave; no debe estar en el build del frontend.
 
 ### Development
 
@@ -59,10 +63,13 @@ npm run build
 │   │   ├── lib/            # Supabase client
 │   │   └── pages/          # Page components
 │   └── ...
-├── scripts/                # Utility scripts
+├── scripts/                # Utility scripts (usan SUPABASE_SERVICE_KEY en local)
 │   ├── seed_entities.js    # Seed entities from CSV
-│   └── create_user.js      # Create admin user
-├── supabase/               # Database migrations
+│   ├── create_user.js      # Create admin user
+│   ├── import_tickets.py   # Import tickets from Excel
+│   └── check_tables.py     # Check notifications/attachments tables
+├── supabase/               # Database migrations + Edge Functions
+│   ├── functions/          # admin-users, send-notification-email, etc.
 │   └── migrations/
 └── input/                  # Source data
     └── odoo/
@@ -85,4 +92,6 @@ Deploy to Vercel:
    - Root Directory: `app`
    - Build Command: `npm run build`
    - Output Directory: `dist`
-4. Add environment variables in Vercel dashboard
+4. Add environment variables in Vercel dashboard: `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (no incluir la service key).
+
+Para la gestión de usuarios (crear/editar) desde la app se usa la Edge Function `admin-users`. Ver `docs/integracion-mojito360.md` para detalles de todas las Edge Functions.

@@ -367,6 +367,10 @@ deno_version = 2
 [functions.auto-close-pending-validation]
 verify_jwt = false
 
+# admin-users valida el JWT y el rol admin dentro de la función
+[functions.admin-users]
+verify_jwt = false
+
 [analytics]
 enabled = true
 port = 54327

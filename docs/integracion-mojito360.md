@@ -147,6 +147,47 @@ Este documento describe la integracion entre Mojito360 y el Help Desk, las Edge 
 - `RESEND_FROM` (opcional)
 - `APP_BASE_URL` (opcional)
 
+---
+
+### 5) admin-users
+
+**Proposito**: Gestion de usuarios por parte de administradores: crear usuarios y actualizar perfiles (nombre, rol, is_active). La funcion valida que el caller sea un usuario con rol `admin` y ejecuta las operaciones con la service role en el servidor, de forma que la **service key no se expone en el frontend**.
+
+**Auth**: El frontend invoca la funcion con el JWT de la sesion (el cliente de Supabase lo anade automaticamente). La funcion verifica el token, consulta `profiles` y exige `role = 'admin'`. En el Dashboard de Supabase, esta funcion debe tener **Verify JWT with legacy secret** en OFF; la autorizacion se hace dentro del codigo.
+
+**Entrada** (JSON), segun `action`:
+
+- **Crear usuario** (`action: "create"`):
+```json
+{
+  "action": "create",
+  "email": "string",
+  "password": "string",
+  "full_name": "string",
+  "role": "admin | agent | dev | client"
+}
+```
+
+- **Actualizar perfil** (`action: "update"`):
+```json
+{
+  "action": "update",
+  "id": "uuid del perfil",
+  "full_name": "string (opcional)",
+  "role": "admin | agent | dev | client (opcional)",
+  "is_active": "boolean (opcional)"
+}
+```
+
+**Salida**: `{ ok: true, user_id?: "uuid" }` en exito, o `{ error: "mensaje" }` con status 4xx/5xx.
+
+**Variables de entorno** (en Supabase):
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `SUPABASE_ANON_KEY` (para validar el JWT del caller)
+
+**Flujo desde el frontend**: La pagina de Usuarios (solo visible para admins) llama a `supabase.functions.invoke('admin-users', { body: { action, ... } })` sin headers manuales; el cliente anade el JWT de la sesion. No se usa ni se expone la service key en el front ni en Vercel.
+
 ## Cron job (Supabase)
 
 Se usa `pg_net` para invocar la Edge Function `auto-close-pending-validation`.

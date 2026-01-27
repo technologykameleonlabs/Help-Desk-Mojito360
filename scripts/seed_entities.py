@@ -17,10 +17,10 @@ from supabase import create_client, Client
 load_dotenv()
 
 SUPABASE_URL = os.getenv("SUPABASE_URL", "https://evhwlybmnimzdepnlqrn.supabase.co")
-SUPABASE_SERVICE_KEY = os.getenv("VITE_SUPABASE_SERVICE_KEY")  # Use service role key for seeding
+SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")  # Use service role key for seeding (local only)
 
 if not SUPABASE_SERVICE_KEY:
-    print("ERROR: Set VITE_SUPABASE_SERVICE_KEY in .env (service role key from Supabase dashboard)")
+    print("ERROR: Set SUPABASE_SERVICE_KEY in .env (service role key from Supabase dashboard)")
     exit(1)
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)

@@ -4,10 +4,11 @@
  */
 
 const SUPABASE_URL = "https://evhwlybmnimzdepnlqrn.supabase.co";
-const SUPABASE_SERVICE_KEY = process.env.VITE_SUPABASE_SERVICE_KEY;
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
 if (!SUPABASE_SERVICE_KEY) {
-  console.error("ERROR: Set VITE_SUPABASE_SERVICE_KEY environment variable");
+  console.error("ERROR: Set SUPABASE_SERVICE_KEY environment variable (service role key from Supabase dashboard)");
+  console.log('Usage: $env:SUPABASE_SERVICE_KEY="your_service_role_key"; node scripts/create_user.js');
   process.exit(1);
 }
 

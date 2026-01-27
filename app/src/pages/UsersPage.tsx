@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Sidebar } from '../components/Sidebar'
-import { adminSupabase } from '../lib/supabase'
+import { supabase } from '../lib/supabase'
 import { useCurrentUser, useProfiles } from '../hooks/useData'
 import type { Profile } from '../lib/supabase'
 import { UserPlus, Shield, Loader2 } from 'lucide-react'
@@ -19,7 +19,6 @@ export function UsersPage() {
   const queryClient = useQueryClient()
   const { data: currentUser, isLoading: loadingUser } = useCurrentUser()
   const { data: profiles, isLoading: loadingProfiles } = useProfiles()
-  const envKeyLength = (import.meta.env.VITE_SUPABASE_SERVICE_KEY || '').length
 
   const [formState, setFormState] = useState<UserFormState>({
     email: '',
@@ -78,12 +77,6 @@ export function UsersPage() {
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!adminSupabase) {
-      console.warn('VITE_SUPABASE_SERVICE_KEY length:', envKeyLength)
-      alert('Falta VITE_SUPABASE_SERVICE_KEY en las variables de entorno.')
-      return
-    }
-
     if (!formState.email || !formState.password || !formState.full_name) {
       alert('Completa email, password y nombre.')
       return
@@ -93,37 +86,39 @@ export function UsersPage() {
     setMessage(null)
 
     try {
-      const { data, error } = await adminSupabase.auth.admin.createUser({
-        email: formState.email,
-        password: formState.password,
-        email_confirm: true,
-        user_metadata: { full_name: formState.full_name },
-      })
-
-      if (error || !data.user) {
-        throw error || new Error('No se pudo crear el usuario.')
+      const { data: sessionData } = await supabase.auth.getSession()
+      let accessToken = sessionData.session?.access_token
+      if (!accessToken) {
+        const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession()
+        if (refreshError) throw refreshError
+        accessToken = refreshData.session?.access_token
+      }
+      if (!accessToken) {
+        alert('No hay sesión activa. Inicia sesión de nuevo.')
+        return
       }
 
-      const { error: profileError } = await adminSupabase
-        .from('profiles')
-        .update({
+      // El cliente de Supabase añade el JWT de la sesión al invoke(); no hace falta headers manuales.
+      const { data: fnData, error } = await supabase.functions.invoke('admin-users', {
+        body: {
+          action: 'create',
+          email: formState.email,
+          password: formState.password,
           full_name: formState.full_name,
           role: formState.role,
-          email: formState.email,
-          is_active: true,
-        })
-        .eq('id', data.user.id)
+        },
+      })
 
-      if (profileError) {
-        throw profileError
-      }
+      if (error) throw error
+      const res = fnData as { error?: string }
+      if (res?.error) throw new Error(res.error)
 
       setFormState({ email: '', password: '', full_name: '', role: 'agent' })
       await queryClient.invalidateQueries({ queryKey: ['profiles'] })
       setMessage('Usuario creado correctamente.')
     } catch (err) {
       console.error(err)
-      alert('No se pudo crear el usuario.')
+      alert(err instanceof Error ? err.message : 'No se pudo crear el usuario.')
     } finally {
       setCreating(false)
     }
@@ -143,34 +138,44 @@ export function UsersPage() {
   }
 
   const saveEdit = async (profile: Profile) => {
-    if (!adminSupabase) {
-      console.warn('VITE_SUPABASE_SERVICE_KEY length:', envKeyLength)
-      alert('Falta VITE_SUPABASE_SERVICE_KEY en las variables de entorno.')
-      return
-    }
-
     if (!editState.full_name) {
       alert('El nombre es requerido.')
       return
     }
 
     try {
-      const { error } = await adminSupabase
-        .from('profiles')
-        .update({
+      const { data: sessionData } = await supabase.auth.getSession()
+      let accessToken = sessionData.session?.access_token
+      if (!accessToken) {
+        const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession()
+        if (refreshError) throw refreshError
+        accessToken = refreshData.session?.access_token
+      }
+      if (!accessToken) {
+        alert('No hay sesión activa. Inicia sesión de nuevo.')
+        return
+      }
+
+      const { data: fnData, error } = await supabase.functions.invoke('admin-users', {
+        body: {
+          action: 'update',
+          id: profile.id,
           full_name: editState.full_name,
           role: editState.role,
           is_active: editState.is_active,
-        })
-        .eq('id', profile.id)
+        },
+      })
 
       if (error) throw error
+      const res = fnData as { error?: string }
+      if (res?.error) throw new Error(res.error)
+
       await queryClient.invalidateQueries({ queryKey: ['profiles'] })
       setEditingId(null)
       setMessage('Usuario actualizado correctamente.')
     } catch (err) {
       console.error(err)
-      alert('No se pudo actualizar el usuario.')
+      alert(err instanceof Error ? err.message : 'No se pudo actualizar el usuario.')
     }
   }
 
@@ -192,11 +197,6 @@ export function UsersPage() {
               <UserPlus className="w-5 h-5" />
               Crear usuario
             </div>
-            {envKeyLength === 0 && (
-              <div className="text-xs text-red-500">
-                VITE_SUPABASE_SERVICE_KEY no esta cargada en el cliente.
-              </div>
-            )}
             <form onSubmit={handleCreateUser} className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-[#8A8F8F] uppercase tracking-wider mb-1.5">
