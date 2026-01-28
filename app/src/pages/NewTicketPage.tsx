@@ -174,6 +174,18 @@ export function NewTicketPage() {
         stage: 'new' as TicketStage,
       })
 
+      let mojitoSyncFailed = false
+      try {
+        const { data: fnData, error } = await supabase.functions.invoke('mojito-send', {
+          body: { action: 'create', ticket_id: created.id },
+        })
+        if (error || !(fnData && (fnData as { ok?: boolean }).ok)) {
+          mojitoSyncFailed = true
+        }
+      } catch {
+        mojitoSyncFailed = true
+      }
+
       const selectedEntity = entities?.find(entity => entity.id === values.entity_id)
       const assigneeId = created.assigned_to || null
       const responsibleId = selectedEntity?.assigned_to || null
@@ -215,7 +227,11 @@ export function NewTicketPage() {
           labelIds: selectedLabels
         })
       }
-      navigate('/')
+      if (mojitoSyncFailed) {
+        navigate(`/ticket/${created.id}`, { state: { mojitoSyncFailed: true } })
+      } else {
+        navigate('/')
+      }
     } catch (error) {
       console.error('Error creating ticket:', error)
       if (error instanceof Error) {

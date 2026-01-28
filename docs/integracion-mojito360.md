@@ -4,9 +4,14 @@ Este documento describe la integracion entre Mojito360 y el Help Desk, las Edge 
 
 ## Estado actual
 
-- La logica general de tickets y adjuntos ya funciona en la app.
-- Las funciones **no dependientes** de la integracion (auto cierre y notificaciones) estan en uso.
-- Las funciones de integracion con Mojito (envio y webhook) **no estan probadas** aun.
+- La lógica general de tickets y adjuntos ya funciona en la app.
+- Las funciones **no dependientes** de la integración (auto cierre y notificaciones) están en uso.
+- **Integración de envío a Mojito (mojito-send)**:
+  - Creación de ticket: el frontend llama a la Edge tras crear el ticket; loading y banner de “no sincronizado” si falla.
+  - Actualización de stage/categoría/empresa: los triggers `notify_mojito_on_stage_change` envían a mojito-send (update).
+  - Comentarios públicos: trigger `on_comment_notify_mojito` y, en frontend, llamada a mojito-send con `comment_id`; loading y mensaje “Comentario guardado. No se sincronizó con Mojito” si falla.
+  - Solución: al guardar solución y pasar a Pdte. Validación, el frontend envía la solución como mensaje a Mojito vía mojito-send; loading y banner si falla.
+- La función **mojito-webhook** (recepcion de actualizaciones desde Mojito) y las pruebas E2E de la integración dependen del entorno y credenciales.
 
 ## Edge Functions
 
@@ -33,34 +38,59 @@ Este documento describe la integracion entre Mojito360 y el Help Desk, las Edge 
 
 ### 2) mojito-send
 
-**Proposito**: Envia actualizaciones de ticket hacia Mojito360 usando OAuth client_credentials (cierre bidireccional).
+**Proposito**: Envía datos del Help Desk hacia la API Help de Mojito360: creación de tickets, mensajes (comentarios y solución) y actualización de estado/categoría/empresa. Usa OAuth client_credentials y reenvía el header `X-Origin: HelpDesk` para evitar bucles.
 
-**Entrada** (JSON):
-```json
-{
-  "ticket_id": "uuid (opcional)",
-  "external_ref": "string (opcional)",
-  "status": "string (opcional)",
-  "stage": "string (opcional)",
-  "title": "string (opcional)",
-  "description": "string (opcional)"
-}
-```
+**URL base de la Edge**: `https://evhwlybmnimzdepnlqrn.supabase.co/functions/v1/mojito-send`
 
-**Notas**:
-- Si envias `ticket_id`, el function buscara `external_ref` en `tickets`.
-- Si envias `stage`, se mapea a estado Mojito (ej: `done` -> `completed`).
-- `mojito-send` reenvia el header `X-Origin` para evitar bucles.
+**Métodos**:
+- **GET**: Prueba de conexión a `GET /api/Help`. Responde `{ ok, status, url, body }`.
+- **POST**: Según el campo `action` del body.
 
-**Salida**: `{ "ok": true, "external_ref": "...", "status": "..." }` o error 500 si falla token o llamada a Mojito.
+**Acciones POST**:
+
+| action   | Descripción | Entrada principal | API Mojito | Salida |
+|----------|-------------|-------------------|------------|--------|
+| `create` | Crear caso en Mojito tras crear ticket en HelpDesk | `ticket_id` (UUID) | POST multipart `/api/Help` (User, Subject, Status, Description, Company, Category, Subcategory). Si la respuesta no trae id, se usa GET `/api/Help` y se toma el caso más reciente que coincida en user/subject. | `{ ok: true, external_ref, external_url }` |
+| `message`| Enviar mensaje (comentario o solución) al caso en Mojito | `ticket_id`, y **o bien** `comment_id` **o bien** `message` + `author` | POST JSON `/api/Help/message/{ticketId}` con `{ type: 'user', author, message, date, attachments: [] }`. Con `comment_id` se usa `created_at` del comentario como fecha; sin `comment_id` se usa la fecha actual. | `{ ok: true }` |
+| (sin action o legacy) | Actualizar caso en Mojito (stage, category, company, etc.) | `ticket_id` (y opc. `external_ref`, `stage`, `category`, `company`, `title`, `description`) | PUT JSON `/api/Help/ticket/{externalRef}` con body parcial en camelCase (status, category, company, subject, description). `status` se obtiene de `stage` con `mapStageToMojitoStatus`. | `{ ok: true }` |
+
+**Mapeo de etapa a estado Mojito** (`mapStageToMojitoStatus`):
+- `new` → `created`
+- `assigned` → `asigned`
+- `pending_client` → `infoPending`
+- `pending_validation` → `approvalPending`
+- `paused` → `paused`
+- `cancelled` → `cancelled`
+- `done` → `completed`
+
+**URL externa del ticket en Mojito**: `https://app.mojito360.com/resources/support/detail-case/{id}` con `id = external_ref`.
 
 **Variables de entorno**:
-- `MOJITO_TOKEN_URL`
-- `MOJITO_CLIENT_ID`
-- `MOJITO_CLIENT_SECRET`
-- `MOJITO_SCOPE` (opcional)
+- `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
+- `MOJITO_TOKEN_URL`, `MOJITO_CLIENT_ID`, `MOJITO_CLIENT_SECRET`, `MOJITO_SCOPE` (opcional)
 - `MOJITO_API_BASE_URL`
-- `MOJITO_API_UPDATE_PATH` (opcional, default `/tickets/update`)
+
+**Logs**: Los fallos se registran con prefijo `[mojito-send]` y contexto (status, url, response, ticket_id, comment_id).
+
+**Triggers SQL que llaman a mojito-send** (ver migración `20260127_mojito_send_triggers.sql`):
+
+1. **notify_mojito_on_stage_change**  
+   Se ejecuta al actualizar un ticket (p. ej. desde el trigger `on_ticket_stage_notify_mojito` cuando cambia `stage`, `category` o `entity_id`). Solo actúa si el ticket es de Mojito360 (`external_source = 'Mojito360'`) y no viene de Mojito (`skip_mojito_sync != true`). Resuelve `company` desde `entities.name` y envía a la Edge: `{ ticket_id, stage, category, company }` (la Edge lo interpreta como update).
+
+2. **notify_mojito_on_comment_insert** + trigger **on_comment_notify_mojito** en `public.comments`  
+   Se ejecuta después de insertar un comentario. Solo si el comentario es público (`is_internal = false`) y el ticket tiene `external_source = 'Mojito360'` y `external_ref`, envía a la Edge: `{ action: 'message', ticket_id, comment_id }`.
+
+**Flujos desde el frontend**:
+
+- **Creación de ticket**: Tras guardar el ticket en Supabase, el frontend llama a `mojito-send` con `{ action: 'create', ticket_id }`. El loading se mantiene hasta que responde la Edge. Si la Edge falla, se navega al detalle del ticket con `state: { mojitoSyncFailed: true }` y se muestra el banner: “Guardado en HelpDesk. No se pudo sincronizar con Mojito. Puedes reintentarlo más tarde.”
+
+- **Comentarios**: Tras crear un comentario público en un ticket Mojito360, el frontend llama a `mojito-send` con `{ action: 'message', ticket_id, comment_id }`. El botón de envío muestra carga hasta que termina la llamada. Si la Edge falla, se muestra el mensaje: “Comentario guardado. No se sincronizó con Mojito.” (también hay envío desde el trigger al insertar el comentario en BD; el frontend asegura feedback inmediato y mensaje de fallo).
+
+- **Solución**: Al confirmar el paso a “Pdte. Validación” con mensaje de solución, tras guardar en Supabase el frontend llama a `mojito-send` con `{ action: 'message', ticket_id, message, author }`. El panel muestra “Guardando...” hasta que termina la Edge. Si falla, se muestra el mismo banner de “No se pudo sincronizar con Mojito”.
+
+**Decisiones aplicadas**:
+- En Mojito no existe campo “solución”; se envía como mensaje vía `POST /api/Help/message/{ticketId}` (type `user`, author = agente).
+- Edición y borrado de mensajes solo en HelpDesk; la API Help de Mojito no expone endpoints para editar/borrar mensajes (RF-15/RF-16).
 
 ---
 

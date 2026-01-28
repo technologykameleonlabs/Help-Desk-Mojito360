@@ -125,6 +125,9 @@ export function TicketDetail() {
   const [pendingTipo, setPendingTipo] = useState('')
   const [pendingTipoError, setPendingTipoError] = useState<string | null>(null)
   const [tipoRequiredModalOpen, setTipoRequiredModalOpen] = useState(false)
+  const [showMojitoSyncBanner, setShowMojitoSyncBanner] = useState(false)
+  const [commentSyncingToMojito, setCommentSyncingToMojito] = useState(false)
+  const [solutionSyncingToMojito, setSolutionSyncingToMojito] = useState(false)
 
   const [draft, setDraft] = useState({
     stage: '' as TicketStage,
@@ -174,6 +177,14 @@ export function TicketDetail() {
     }, 60000)
     return () => clearInterval(interval)
   }, [])
+
+  useEffect(() => {
+    const state = location.state as { mojitoSyncFailed?: boolean } | null
+    if (state?.mojitoSyncFailed) {
+      setShowMojitoSyncBanner(true)
+      navigate(location.pathname, { replace: true, state: {} })
+    }
+  }, [location.state, location.pathname, navigate])
 
   // Track mentions as user types
   const handleMention = useCallback((userId: string) => {
@@ -500,6 +511,28 @@ export function TicketDetail() {
         await uploadCommentAttachments(result.id)
       }
 
+      const isPublicComment = currentUser?.role === 'client' || !isInternal
+      if (
+        result?.id &&
+        ticket.external_source === 'Mojito360' &&
+        ticket.external_ref &&
+        isPublicComment
+      ) {
+        setCommentSyncingToMojito(true)
+        try {
+          const { data, error } = await supabase.functions.invoke('mojito-send', {
+            body: { action: 'message', ticket_id: ticket.id, comment_id: result.id },
+          })
+          if (error || !(data as { ok?: boolean })?.ok) {
+            setSaveMessage('Comentario guardado. No se sincronizó con Mojito.')
+          }
+        } catch {
+          setSaveMessage('Comentario guardado. No se sincronizó con Mojito.')
+        } finally {
+          setCommentSyncingToMojito(false)
+        }
+      }
+
       setCommentText('')
       setMentionedUserIds([])
       setIsInternal(false)
@@ -696,10 +729,25 @@ export function TicketDetail() {
     })) || [])
   ]
 
-  const isSaving = updateTicket.isPending || updateTicketLabels.isPending || awaitingRefresh || isFetching
+  const isSaving = updateTicket.isPending || updateTicketLabels.isPending || awaitingRefresh || isFetching || solutionSyncingToMojito
 
   return (
     <div className="flex flex-col h-full bg-white border-l border-[#E0E0E1] w-[600px] animate-in slide-in-from-right duration-300 shadow-xl relative z-20">
+      {showMojitoSyncBanner && (
+        <div className="px-4 py-2.5 bg-amber-50 border-b border-amber-200 flex items-center justify-between gap-2">
+          <p className="text-sm text-amber-800">
+            Guardado en HelpDesk. No se pudo sincronizar con Mojito. Puedes reintentarlo más tarde.
+          </p>
+          <button
+            type="button"
+            onClick={() => setShowMojitoSyncBanner(false)}
+            className="shrink-0 p-1 hover:bg-amber-100 rounded text-amber-700"
+            aria-label="Cerrar"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
       {/* Header */}
       <header className="flex items-center justify-between px-6 py-4 border-b border-[#E0E0E1]">
         <div className="flex items-center gap-3">
@@ -1314,10 +1362,10 @@ export function TicketDetail() {
                 />
                 <button
                   type="submit"
-                  disabled={createComment.isPending || commentUploading || !commentText.trim()}
+                  disabled={createComment.isPending || commentUploading || commentSyncingToMojito || !commentText.trim()}
                   className="absolute bottom-3 right-3 p-2 bg-[#6353FF] hover:bg-[#5244e6] text-white rounded-full transition-all disabled:opacity-50"
                 >
-                  {createComment.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  {(createComment.isPending || commentSyncingToMojito) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                 </button>
               </div>
               <div className="flex items-center justify-between gap-2">
@@ -1515,12 +1563,33 @@ export function TicketDetail() {
           }
           setSolutionModalOpen(false)
           setPendingTipoError(null)
+          const solutionText = solutionModalText.trim()
           try {
             await applyUpdates({
               ...pendingUpdates,
-              solution: solutionModalText.trim(),
+              solution: solutionText,
               ...(ticket && !isValidTicketType(ticket.ticket_type) ? { ticket_type: pendingTipo } : {}),
             })
+            if (ticket?.external_source === 'Mojito360' && ticket.external_ref) {
+              setSolutionSyncingToMojito(true)
+              try {
+                const { data, error } = await supabase.functions.invoke('mojito-send', {
+                  body: {
+                    action: 'message',
+                    ticket_id: ticket.id,
+                    message: solutionText,
+                    author: currentUser?.email ?? '',
+                  },
+                })
+                if (error || !(data as { ok?: boolean })?.ok) {
+                  setShowMojitoSyncBanner(true)
+                }
+              } catch {
+                setShowMojitoSyncBanner(true)
+              } finally {
+                setSolutionSyncingToMojito(false)
+              }
+            }
           } catch (error) {
             console.error(error)
             alert('No se pudo actualizar el ticket.')
